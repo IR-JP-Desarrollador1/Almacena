@@ -24,11 +24,19 @@ class AccessControlSeeder extends Seeder
                 ['name' => 'Administrar datos maestros', 'code' => 'catalogs.manage', 'module' => 'catálogos'],
                 ['name' => 'Consultar áreas solicitantes', 'code' => 'departments.view', 'module' => 'organización'],
                 ['name' => 'Administrar áreas solicitantes', 'code' => 'departments.manage', 'module' => 'organización'],
-                ['name' => 'Consultar requisiciones', 'code' => 'purchases.requisitions.view', 'module' => 'compras'],
-                ['name' => 'Crear requisiciones', 'code' => 'purchases.requisitions.create', 'module' => 'compras'],
-                ['name' => 'Aprobar o rechazar requisiciones asignadas', 'code' => 'purchases.requisitions.decide', 'module' => 'compras'],
+                ['name' => 'Consultar requisiciones en Compras', 'code' => 'purchases.requisitions.view', 'module' => 'compras', 'description' => 'Consultar requisiciones enviadas a aprobación o aprobadas.'],
+                ['name' => 'Aprobar requisiciones asignadas', 'code' => 'purchases.requisitions.approve', 'module' => 'compras', 'description' => 'Aprobar requisiciones pendientes asignadas al jefe del área.'],
+                ['name' => 'Aprobar cualquier requisición (Administración)', 'code' => 'purchases.requisitions.approve_any', 'module' => 'compras', 'description' => 'Permite al perfil Administración aprobar requisiciones pendientes aunque no sea el jefe asignado.'],
+                ['name' => 'Rechazar requisiciones asignadas', 'code' => 'purchases.requisitions.reject', 'module' => 'compras', 'description' => 'Rechazar requisiciones pendientes asignadas al jefe del área.'],
+                ['name' => 'Consultar requisiciones de Inventario', 'code' => 'inventory.requisitions.view', 'module' => 'inventario', 'description' => 'Consultar requisiciones de la bodega autorizada; los borradores son visibles solo para su solicitante.'],
+                ['name' => 'Gestionar requisiciones de Inventario', 'code' => 'inventory.requisitions.manage', 'module' => 'inventario', 'description' => 'Crear, editar, activar y cancelar las requisiciones propias.'],
+                ['name' => 'Enviar requisiciones a aprobación', 'code' => 'inventory.requisitions.submit', 'module' => 'inventario', 'description' => 'Enviar el saldo pendiente de una requisición activa al jefe del área.'],
+                ['name' => 'Registrar salidas parciales de requisiciones', 'code' => 'inventory.requisitions.dispatch', 'module' => 'inventario', 'description' => 'Registrar entregas parciales de productos para requisiciones activas o aprobadas.'],
+                ['name' => 'Consultar comparación de cotizaciones', 'code' => 'purchases.quotes.view', 'module' => 'compras', 'description' => 'Consultar ofertas y comparaciones de las requisiciones aprobadas.'],
+                ['name' => 'Registrar cotizaciones de proveedores', 'code' => 'purchases.quotes.manage', 'module' => 'compras', 'description' => 'Crear, completar o actualizar las ofertas recibidas para una requisición.'],
+                ['name' => 'Adjudicar ofertas de cotización', 'code' => 'purchases.quotes.award', 'module' => 'compras', 'description' => 'Seleccionar la oferta ganadora por producto y guardar la comparación.'],
+                ['name' => 'Generar órdenes desde cotizaciones', 'code' => 'purchases.quotes.generate_orders', 'module' => 'compras', 'description' => 'Generar órdenes de compra borrador a partir de ofertas adjudicadas.'],
                 ['name' => 'Consultar órdenes de compra', 'code' => 'purchases.orders.view', 'module' => 'compras'],
-                ['name' => 'Crear órdenes de compra', 'code' => 'purchases.orders.create', 'module' => 'compras'],
                 ['name' => 'Aprobar órdenes de compra', 'code' => 'purchases.orders.approve', 'module' => 'compras'],
                 ['name' => 'Consultar entradas de inventario', 'code' => 'inventory.receipts.view', 'module' => 'inventario'],
                 ['name' => 'Registrar entradas de inventario', 'code' => 'inventory.receipts.create', 'module' => 'inventario'],
@@ -42,6 +50,26 @@ class AccessControlSeeder extends Seeder
                     ['code' => $attributes['code']],
                     $attributes,
                 );
+            }
+
+            $legacyCreatePermission = Permission::query()->where('code', 'purchases.requisitions.create')->first();
+            if ($legacyCreatePermission) {
+                $inventoryManagePermission = Permission::query()
+                    ->where('code', 'inventory.requisitions.manage')
+                    ->firstOrFail();
+                $inventorySubmitPermission = Permission::query()
+                    ->where('code', 'inventory.requisitions.submit')
+                    ->firstOrFail();
+
+                foreach ($legacyCreatePermission->roles as $role) {
+                    $role->permissions()->syncWithoutDetaching([
+                        $inventoryManagePermission->id,
+                        $inventorySubmitPermission->id,
+                    ]);
+                }
+
+                $legacyCreatePermission->roles()->detach();
+                $legacyCreatePermission->delete();
             }
 
             $roles = [
@@ -67,9 +95,13 @@ class AccessControlSeeder extends Seeder
             $purchasing->permissions()->syncWithoutDetaching(
                 Permission::query()->whereIn('code', [
                     'purchases.requisitions.view',
-                    'purchases.requisitions.decide',
+                    'purchases.requisitions.approve',
+                    'purchases.requisitions.reject',
+                    'purchases.quotes.view',
+                    'purchases.quotes.manage',
+                    'purchases.quotes.award',
+                    'purchases.quotes.generate_orders',
                     'purchases.orders.view',
-                    'purchases.orders.create',
                     'purchases.orders.approve',
                 ])->pluck('id'),
             );
@@ -77,6 +109,8 @@ class AccessControlSeeder extends Seeder
             $warehouse = Role::query()->where('slug', 'almacen')->firstOrFail();
             $warehouse->permissions()->syncWithoutDetaching(
                 Permission::query()->whereIn('code', [
+                    'inventory.requisitions.view',
+                    'inventory.requisitions.dispatch',
                     'inventory.receipts.view',
                     'inventory.receipts.create',
                     'inventory.issues.view',
@@ -95,9 +129,12 @@ class AccessControlSeeder extends Seeder
             $requester = Role::query()->where('slug', 'solicitante')->firstOrFail();
             $requester->permissions()->syncWithoutDetaching(
                 Permission::query()->whereIn('code', [
-                    'purchases.requisitions.view',
-                    'purchases.requisitions.create',
+                    'inventory.requisitions.manage',
+                    'inventory.requisitions.submit',
                 ])->pluck('id'),
+            );
+            $requester->permissions()->detach(
+                Permission::query()->where('code', 'purchases.requisitions.view')->pluck('id'),
             );
         });
     }

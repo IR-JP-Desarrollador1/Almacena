@@ -5,16 +5,21 @@ namespace App\Models;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
+use Illuminate\Database\Eloquent\Relations\HasOne;
 
 class Requisition extends Model
 {
     public const STATUS_DRAFT = 'draft';
+
+    public const STATUS_ACTIVE = 'active';
 
     public const STATUS_PENDING_APPROVAL = 'pending_approval';
 
     public const STATUS_APPROVED = 'approved';
 
     public const STATUS_REJECTED = 'rejected';
+
+    public const STATUS_CANCELLED = 'cancelled';
 
     protected $fillable = [
         'reference',
@@ -64,9 +69,19 @@ class Requisition extends Model
         return $this->hasMany(RequisitionItem::class);
     }
 
-    public function purchaseOrder(): \Illuminate\Database\Eloquent\Relations\HasOne
+    public function purchaseOrder(): HasOne
     {
         return $this->hasOne(PurchaseOrder::class);
+    }
+
+    public function purchaseOrders(): HasMany
+    {
+        return $this->hasMany(PurchaseOrder::class);
+    }
+
+    public function supplierQuotes(): HasMany
+    {
+        return $this->hasMany(SupplierQuote::class);
     }
 
     public function inventoryIssues(): HasMany

@@ -1,13 +1,9 @@
 <x-app-layout>
     <x-slot name="header">
-        <div>
-            <p class="text-xs font-semibold uppercase tracking-wide text-green-700">{{ __('Inventario') }}</p>
-            <h1 class="mt-1 text-xl font-semibold text-gray-800">{{ __('Kardex de inventario') }}</h1>
-        </div>
+        <h1 class="text-xl font-semibold text-gray-800">{{ __('Kardex de inventario') }}</h1>
     </x-slot>
     <main class="mx-auto max-w-7xl space-y-5 px-4 py-8 sm:px-6 lg:px-8">
         <section class="rounded-lg border border-gray-200 bg-white p-6 shadow-sm">
-            <p class="mb-5 text-sm text-gray-600">{{ __('Consulta en un mismo informe todos los movimientos de las bodegas y productos a los que tienes acceso. Los filtros son opcionales y el saldo se calcula por producto y bodega.') }}</p>
             <form method="GET" action="{{ route('inventory.kardex') }}" class="grid gap-5 md:grid-cols-2 lg:grid-cols-4">
                 <div>
                     <label for="warehouse_id" class="block text-sm font-medium text-gray-700">{{ __('Bodega') }}</label>

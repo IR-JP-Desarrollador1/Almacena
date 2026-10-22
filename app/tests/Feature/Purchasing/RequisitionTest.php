@@ -6,6 +6,9 @@ use App\Models\AuditLog;
 use App\Models\Branch;
 use App\Models\Company;
 use App\Models\Department;
+use App\Models\InventoryIssue;
+use App\Models\InventoryIssueItem;
+use App\Models\Permission;
 use App\Models\Product;
 use App\Models\Requisition;
 use App\Models\Role;
@@ -80,6 +83,257 @@ class RequisitionTest extends TestCase
         ]);
     }
 
+    public function test_requester_can_open_requisition_creation_form(): void
+    {
+        $this->actingAs($this->requester)
+            ->get(route('purchasing.requisitions.create'))
+            ->assertOk()
+            ->assertSee('Nueva requisición')
+            ->assertSee("items[' + index + '][quantity]", false)
+            ->assertSee("items[' + index + '][notes]", false);
+    }
+
+    public function test_requisitions_move_from_inventory_to_purchasing_after_submission(): void
+    {
+        $this->actingAs($this->requester)
+            ->post(route('inventory.requisitions.store'), $this->requisitionData())
+            ->assertRedirect(route('inventory.requisitions.show', Requisition::query()->firstOrFail()));
+        $requisition = Requisition::query()->firstOrFail();
+
+        $this->actingAs($this->requester)
+            ->get(route('inventory.requisitions.index'))
+            ->assertOk()
+            ->assertSee($requisition->reference);
+        $this->get(route('purchasing.requisitions.index'))
+            ->assertForbidden()
+            ->assertDontSee($requisition->reference);
+        $this->actingAs($this->manager)
+            ->get(route('purchasing.requisitions.index'))
+            ->assertOk()
+            ->assertDontSee($requisition->reference);
+
+        $this->actingAs($this->requester)
+            ->get(route('inventory.requisitions.show', $requisition))
+            ->assertOk()
+            ->assertSee('Editar borrador')
+            ->assertSee('Activar requisición')
+            ->assertSee('Cancelar requisición')
+            ->assertDontSee('Enviar a aprobación')
+            ->assertDontSee('Aprobar requisición')
+            ->assertDontSee('Registrar salida parcial');
+        $this->get(route('purchasing.requisitions.show', $requisition))
+            ->assertOk()
+            ->assertDontSee('Editar borrador')
+            ->assertDontSee('Enviar a aprobación')
+            ->assertDontSee('Registrar salida parcial');
+
+        $this->actingAs($this->requester)
+            ->put(route('inventory.requisitions.update', $requisition), $this->requisitionData())
+            ->assertRedirect(route('inventory.requisitions.show', $requisition));
+        $this->post(route('inventory.requisitions.activate', $requisition))
+            ->assertRedirect(route('inventory.requisitions.show', $requisition));
+        $this->assertSame(Requisition::STATUS_ACTIVE, $requisition->fresh()->status);
+        $this->post(route('inventory.requisitions.submit', $requisition))
+            ->assertRedirect(route('purchasing.requisitions.show', $requisition));
+        $this->get(route('inventory.requisitions.index'))
+            ->assertOk()
+            ->assertDontSee($requisition->reference);
+        $this->get(route('purchasing.requisitions.index'))
+            ->assertForbidden();
+        $this->actingAs($this->manager)
+            ->get(route('purchasing.requisitions.index'))
+            ->assertOk()
+            ->assertSee($requisition->reference);
+
+        $this->actingAs($this->manager)
+            ->post(route('purchasing.requisitions.approve', $requisition))
+            ->assertRedirect(route('purchasing.requisitions.show', $requisition));
+        $this->actingAs($this->requester)
+            ->get(route('inventory.requisitions.index'))
+            ->assertOk()
+            ->assertDontSee($requisition->reference);
+        $this->get(route('purchasing.requisitions.index'))
+            ->assertForbidden();
+        $this->actingAs($this->manager)
+            ->get(route('purchasing.requisitions.index'))
+            ->assertOk()
+            ->assertSee($requisition->reference);
+
+        $warehouseOperator = User::factory()->create();
+        $warehouseOperator->roles()->attach(Role::query()->where('slug', 'almacen')->firstOrFail());
+        $warehouseOperator->warehouses()->attach($this->warehouse);
+        $this->actingAs($warehouseOperator)
+            ->get(route('inventory.requisitions.show', $requisition))
+            ->assertOk()
+            ->assertSee('Registrar salida parcial');
+        $this->get(route('purchasing.requisitions.show', $requisition))
+            ->assertForbidden();
+    }
+
+    public function test_requester_can_cancel_before_dispatch_and_cancelled_requisitions_remain_visible_in_inventory(): void
+    {
+        $this->actingAs($this->requester)
+            ->post(route('inventory.requisitions.store'), $this->requisitionData());
+        $requisition = Requisition::query()->firstOrFail();
+
+        $this->post(route('inventory.requisitions.submit', $requisition))->assertForbidden();
+        $this->post(route('inventory.requisitions.activate', $requisition))
+            ->assertRedirect(route('inventory.requisitions.show', $requisition));
+        $this->assertSame(Requisition::STATUS_ACTIVE, $requisition->fresh()->status);
+
+        $this->post(route('inventory.requisitions.cancel', $requisition))
+            ->assertRedirect(route('inventory.requisitions.show', $requisition));
+        $this->assertSame(Requisition::STATUS_CANCELLED, $requisition->fresh()->status);
+        $this->get(route('inventory.requisitions.index'))
+            ->assertOk()
+            ->assertSee($requisition->reference)
+            ->assertSee('Cancelada');
+    }
+
+    public function test_sending_requisition_to_approval_requires_its_dedicated_permission(): void
+    {
+        $this->actingAs($this->requester)
+            ->post(route('inventory.requisitions.store'), $this->requisitionData())
+            ->assertRedirect();
+        $requisition = Requisition::query()->firstOrFail();
+        $this->post(route('inventory.requisitions.activate', $requisition))->assertRedirect();
+
+        Role::query()->where('slug', 'solicitante')->firstOrFail()->permissions()->detach(
+            Permission::query()->where('code', 'inventory.requisitions.submit')->value('id'),
+        );
+
+        $this->get(route('inventory.requisitions.show', $requisition))
+            ->assertOk()
+            ->assertDontSee('Enviar a aprobación');
+        $this->post(route('inventory.requisitions.submit', $requisition))->assertForbidden();
+    }
+
+    public function test_requisition_approval_and_rejection_permissions_are_independent(): void
+    {
+        $this->actingAs($this->requester)
+            ->post(route('inventory.requisitions.store'), $this->requisitionData())
+            ->assertRedirect();
+        $requisition = Requisition::query()->firstOrFail();
+        $this->post(route('inventory.requisitions.activate', $requisition))->assertRedirect();
+        $this->post(route('inventory.requisitions.submit', $requisition))->assertRedirect();
+
+        Role::query()->where('slug', 'compras')->firstOrFail()->permissions()->detach(
+            Permission::query()->where('code', 'purchases.requisitions.approve')->value('id'),
+        );
+
+        $this->actingAs($this->manager)
+            ->get(route('purchasing.requisitions.show', $requisition))
+            ->assertOk()
+            ->assertDontSee('Aprobar requisición')
+            ->assertSee('Rechazar');
+        $this->post(route('purchasing.requisitions.approve', $requisition))->assertForbidden();
+        $this->post(route('purchasing.requisitions.reject', $requisition), [
+            'rejection_reason' => 'Se requiere corregir la solicitud.',
+        ])->assertRedirect(route('inventory.requisitions.show', $requisition));
+        $this->assertSame(Requisition::STATUS_REJECTED, $requisition->fresh()->status);
+    }
+
+    public function test_administration_can_approve_any_pending_requisition(): void
+    {
+        $this->actingAs($this->requester)
+            ->post(route('inventory.requisitions.store'), $this->requisitionData())
+            ->assertRedirect();
+        $requisition = Requisition::query()->firstOrFail();
+        $this->post(route('inventory.requisitions.activate', $requisition))->assertRedirect();
+        $this->post(route('inventory.requisitions.submit', $requisition))->assertRedirect();
+
+        $administrator = User::factory()->create();
+        $administrator->roles()->attach(Role::query()->where('slug', 'administracion')->firstOrFail());
+
+        $this->actingAs($administrator)
+            ->get(route('purchasing.requisitions.show', $requisition))
+            ->assertOk()
+            ->assertSee('Aprobar requisición');
+        $this->post(route('purchasing.requisitions.approve', $requisition))
+            ->assertRedirect(route('purchasing.requisitions.show', $requisition));
+
+        $this->assertSame(Requisition::STATUS_APPROVED, $requisition->fresh()->status);
+        $this->assertSame($this->manager->id, $requisition->fresh()->approver_user_id);
+        $this->assertDatabaseHas('audit_logs', [
+            'user_id' => $administrator->id,
+            'action' => Requisition::STATUS_APPROVED,
+            'entity_type' => 'requisition',
+            'entity_id' => $requisition->id,
+        ]);
+    }
+
+    public function test_administration_can_approve_its_own_requisition_with_super_permission(): void
+    {
+        $administrator = User::factory()->create(['department_id' => $this->department->id]);
+        $administrator->roles()->attach(Role::query()->where('slug', 'administracion')->firstOrFail());
+
+        $this->actingAs($administrator)
+            ->post(route('inventory.requisitions.store'), $this->requisitionData())
+            ->assertRedirect();
+        $requisition = Requisition::query()->firstOrFail();
+        $this->post(route('inventory.requisitions.activate', $requisition))->assertRedirect();
+        $this->post(route('inventory.requisitions.submit', $requisition))->assertRedirect();
+
+        $this->get(route('purchasing.requisitions.show', $requisition))
+            ->assertOk()
+            ->assertSee('Aprobar requisición');
+        $this->post(route('purchasing.requisitions.approve', $requisition))
+            ->assertRedirect(route('purchasing.requisitions.show', $requisition));
+
+        $this->assertSame(Requisition::STATUS_APPROVED, $requisition->fresh()->status);
+        $this->assertSame($administrator->id, $requisition->fresh()->requester_user_id);
+    }
+
+    public function test_cannot_cancel_requisition_after_an_issue_has_been_recorded(): void
+    {
+        $this->actingAs($this->requester)
+            ->post(route('inventory.requisitions.store'), $this->requisitionData());
+        $requisition = Requisition::query()->firstOrFail();
+        $this->post(route('inventory.requisitions.activate', $requisition));
+        $item = $requisition->items()->firstOrFail();
+        $warehouseOperator = User::factory()->create();
+        $warehouseOperator->roles()->attach(Role::query()->where('slug', 'almacen')->firstOrFail());
+        $warehouseOperator->warehouses()->attach($this->warehouse);
+        $this->actingAs($warehouseOperator)
+            ->get(route('inventory.requisitions.index'))
+            ->assertOk()
+            ->assertSee($requisition->reference);
+        $this->get(route('inventory.requisitions.show', $requisition))
+            ->assertOk()
+            ->assertSee('Registrar salida parcial')
+            ->assertDontSee('Editar borrador');
+
+        $this->actingAs($this->requester);
+        $issue = InventoryIssue::create([
+            'reference' => 'ISS-TEST-1',
+            'requisition_id' => $requisition->id,
+            'warehouse_id' => $this->warehouse->id,
+            'issued_by_user_id' => $this->requester->id,
+            'issued_at' => now(),
+        ]);
+        InventoryIssueItem::create([
+            'inventory_issue_id' => $issue->id,
+            'requisition_item_id' => $item->id,
+            'product_id' => $item->product_id,
+            'product_code' => $item->product_code,
+            'product_name' => $item->product_name,
+            'unit_abbreviation' => $item->unit_abbreviation,
+            'quantity' => '0.500',
+        ]);
+
+        $this->post(route('inventory.requisitions.cancel', $requisition))
+            ->assertStatus(409);
+        $this->assertSame(Requisition::STATUS_ACTIVE, $requisition->fresh()->status);
+
+        $this->post(route('inventory.requisitions.submit', $requisition))
+            ->assertRedirect(route('purchasing.requisitions.show', $requisition));
+        $this->assertSame(Requisition::STATUS_PENDING_APPROVAL, $requisition->fresh()->status);
+        $this->actingAs($this->manager)
+            ->post(route('purchasing.requisitions.approve', $requisition))
+            ->assertRedirect(route('purchasing.requisitions.show', $requisition));
+        $this->assertSame(Requisition::STATUS_APPROVED, $requisition->fresh()->status);
+    }
+
     public function test_requester_creates_submits_and_only_the_assigned_manager_approves(): void
     {
         $this->actingAs($this->requester)
@@ -99,6 +353,7 @@ class RequisitionTest extends TestCase
             'quantity' => 2.5,
         ]);
 
+        $this->post(route('inventory.requisitions.activate', $requisition))->assertRedirect();
         $this->post(route('purchasing.requisitions.submit', $requisition))
             ->assertRedirect(route('purchasing.requisitions.show', $requisition));
         $requisition->refresh();
@@ -134,11 +389,12 @@ class RequisitionTest extends TestCase
     {
         $this->actingAs($this->requester)->post(route('purchasing.requisitions.store'), $this->requisitionData());
         $requisition = Requisition::query()->firstOrFail();
+        $this->post(route('inventory.requisitions.activate', $requisition));
         $this->post(route('purchasing.requisitions.submit', $requisition));
 
         $this->actingAs($this->manager)
             ->post(route('purchasing.requisitions.reject', $requisition), ['rejection_reason' => 'Ajustar cantidad solicitada'])
-            ->assertRedirect(route('purchasing.requisitions.show', $requisition));
+            ->assertRedirect(route('inventory.requisitions.show', $requisition));
         $this->assertSame(Requisition::STATUS_REJECTED, $requisition->fresh()->status);
 
         $corrected = $this->requisitionData();
@@ -150,6 +406,7 @@ class RequisitionTest extends TestCase
         $this->assertSame(Requisition::STATUS_DRAFT, $requisition->fresh()->status);
         $this->assertNull($requisition->fresh()->rejection_reason);
         $this->assertSame('1.000', $requisition->items()->firstOrFail()->quantity);
+        $this->post(route('inventory.requisitions.activate', $requisition));
         $this->post(route('purchasing.requisitions.submit', $requisition));
         $this->assertSame(Requisition::STATUS_PENDING_APPROVAL, $requisition->fresh()->status);
     }
@@ -167,9 +424,10 @@ class RequisitionTest extends TestCase
 
         $this->actingAs($this->requester)->post(route('purchasing.requisitions.store'), $this->requisitionData());
         $requisition = Requisition::query()->firstOrFail();
+        $this->post(route('inventory.requisitions.activate', $requisition));
         $this->post(route('purchasing.requisitions.submit', $requisition))
             ->assertSessionHasErrors('approval');
-        $this->assertSame(Requisition::STATUS_DRAFT, $requisition->fresh()->status);
+        $this->assertSame(Requisition::STATUS_ACTIVE, $requisition->fresh()->status);
 
         $unassigned = User::factory()->create();
         $unassigned->roles()->attach(Role::query()->where('slug', 'solicitante')->firstOrFail());
@@ -190,7 +448,18 @@ class RequisitionTest extends TestCase
         $requisition = Requisition::query()->firstOrFail();
         $otherRequester = User::factory()->create();
         $otherRequester->roles()->attach(Role::query()->where('slug', 'solicitante')->firstOrFail());
+        $otherRequester->roles()->attach(Role::query()->where('slug', 'compras')->firstOrFail());
+        $otherRequester->warehouses()->attach($this->warehouse);
         $otherRequester->update(['department_id' => $this->department->id]);
+
+        $this->actingAs($otherRequester)
+            ->get(route('inventory.requisitions.show', $requisition))
+            ->assertOk()
+            ->assertDontSee('Editar borrador');
+        $this->get(route('inventory.requisitions.edit', $requisition))
+            ->assertForbidden();
+        $this->put(route('inventory.requisitions.update', $requisition), $this->requisitionData())
+            ->assertForbidden();
 
         $this->actingAs($otherRequester)
             ->put(route('purchasing.requisitions.update', $requisition), $this->requisitionData())
@@ -200,6 +469,7 @@ class RequisitionTest extends TestCase
             ->post(route('purchasing.requisitions.reject', $requisition), ['rejection_reason' => 'No'])
             ->assertForbidden();
 
+        $this->post(route('inventory.requisitions.activate', $requisition));
         $this->post(route('purchasing.requisitions.submit', $requisition));
         $this->actingAs($this->manager)
             ->post(route('purchasing.requisitions.reject', $requisition), ['rejection_reason' => 'No'])

@@ -11,12 +11,14 @@ use App\Http\Controllers\Admin\RegionalSettingsController;
 use App\Http\Controllers\Admin\RoleController;
 use App\Http\Controllers\Admin\StorageLocationController;
 use App\Http\Controllers\Admin\SupplierController;
+use App\Http\Controllers\Admin\SupplierEvaluationController;
 use App\Http\Controllers\Admin\UnitController;
 use App\Http\Controllers\Admin\UserController;
 use App\Http\Controllers\Admin\WarehouseController;
 use App\Http\Controllers\Inventory\InventoryMovementController;
 use App\Http\Controllers\ProfileController;
 use App\Http\Controllers\Purchasing\PurchaseOrderController;
+use App\Http\Controllers\Purchasing\QuoteComparisonController;
 use App\Http\Controllers\Purchasing\RequisitionController;
 use Illuminate\Support\Facades\Route;
 
@@ -90,6 +92,9 @@ Route::middleware(['auth', 'active'])->group(function () {
 
         Route::middleware('permission:catalogs.view|catalogs.manage')->group(function () {
             Route::get('/catalogs/products', [ProductController::class, 'index'])->name('catalogs.products.index');
+            Route::get('/catalogs/products/import', [ProductController::class, 'importForm'])->middleware('permission:catalogs.manage')->name('catalogs.products.import.form');
+            Route::post('/catalogs/products/import', [ProductController::class, 'importFile'])->middleware('permission:catalogs.manage')->name('catalogs.products.import');
+            Route::get('/catalogs/products/import/template/{format}', [ProductController::class, 'downloadTemplate'])->middleware('permission:catalogs.manage')->name('catalogs.products.import.template');
             Route::get('/catalogs/products/create', [ProductController::class, 'create'])->middleware('permission:catalogs.manage')->name('catalogs.products.create');
             Route::post('/catalogs/products', [ProductController::class, 'store'])->middleware('permission:catalogs.manage')->name('catalogs.products.store');
             Route::get('/catalogs/products/{product}/edit', [ProductController::class, 'edit'])->middleware('permission:catalogs.manage')->name('catalogs.products.edit');
@@ -106,6 +111,12 @@ Route::middleware(['auth', 'active'])->group(function () {
             Route::post('/catalogs/suppliers', [SupplierController::class, 'store'])->middleware('permission:catalogs.manage')->name('catalogs.suppliers.store');
             Route::get('/catalogs/suppliers/{supplier}/edit', [SupplierController::class, 'edit'])->middleware('permission:catalogs.manage')->name('catalogs.suppliers.edit');
             Route::put('/catalogs/suppliers/{supplier}', [SupplierController::class, 'update'])->middleware('permission:catalogs.manage')->name('catalogs.suppliers.update');
+            Route::get('/catalogs/supplier-evaluations', [SupplierEvaluationController::class, 'index'])
+                ->middleware('permission:catalogs.manage')
+                ->name('catalogs.supplier-evaluations.index');
+            Route::post('/catalogs/supplier-evaluations', [SupplierEvaluationController::class, 'store'])
+                ->middleware('permission:catalogs.manage')
+                ->name('catalogs.supplier-evaluations.store');
 
             Route::get('/catalogs/currencies', [CurrencyController::class, 'index'])->name('catalogs.currencies.index');
             Route::get('/catalogs/currencies/create', [CurrencyController::class, 'create'])->middleware('permission:catalogs.manage')->name('catalogs.currencies.create');
@@ -115,49 +126,64 @@ Route::middleware(['auth', 'active'])->group(function () {
         });
     });
 
-    Route::middleware('permission:purchases.requisitions.view|purchases.requisitions.create|purchases.requisitions.decide|purchases.orders.view|purchases.orders.create|purchases.orders.approve')
+    Route::middleware('permission:purchases.requisitions.view|purchases.requisitions.approve|purchases.requisitions.approve_any|purchases.requisitions.reject|inventory.requisitions.manage|inventory.requisitions.submit|purchases.quotes.view|purchases.quotes.manage|purchases.quotes.award|purchases.quotes.generate_orders|purchases.orders.view|purchases.orders.approve')
         ->prefix('purchasing')
         ->name('purchasing.')
         ->group(function () {
             Route::get('/requisitions', [RequisitionController::class, 'index'])
-                ->middleware('permission:purchases.requisitions.view|purchases.requisitions.create|purchases.requisitions.decide')
+                ->middleware('permission:purchases.requisitions.view|purchases.requisitions.approve|purchases.requisitions.approve_any|purchases.requisitions.reject')
                 ->name('requisitions.index');
             Route::get('/requisitions/create', [RequisitionController::class, 'create'])
-                ->middleware('permission:purchases.requisitions.create')
+                ->middleware('permission:inventory.requisitions.manage')
                 ->name('requisitions.create');
             Route::post('/requisitions', [RequisitionController::class, 'store'])
-                ->middleware('permission:purchases.requisitions.create')
+                ->middleware('permission:inventory.requisitions.manage')
                 ->name('requisitions.store');
             Route::get('/requisitions/{requisition}', [RequisitionController::class, 'show'])
-                ->middleware('permission:purchases.requisitions.view|purchases.requisitions.create|purchases.requisitions.decide')
+                ->middleware('permission:purchases.requisitions.view|purchases.requisitions.approve|purchases.requisitions.approve_any|purchases.requisitions.reject|inventory.requisitions.manage|inventory.requisitions.submit|purchases.quotes.view|purchases.quotes.manage|purchases.quotes.award|purchases.quotes.generate_orders')
                 ->name('requisitions.show');
             Route::get('/requisitions/{requisition}/edit', [RequisitionController::class, 'edit'])
-                ->middleware('permission:purchases.requisitions.create')
+                ->middleware('permission:inventory.requisitions.manage')
                 ->name('requisitions.edit');
             Route::put('/requisitions/{requisition}', [RequisitionController::class, 'update'])
-                ->middleware('permission:purchases.requisitions.create')
+                ->middleware('permission:inventory.requisitions.manage')
                 ->name('requisitions.update');
             Route::post('/requisitions/{requisition}/submit', [RequisitionController::class, 'submit'])
-                ->middleware('permission:purchases.requisitions.create')
+                ->middleware('permission:inventory.requisitions.submit')
                 ->name('requisitions.submit');
             Route::post('/requisitions/{requisition}/approve', [RequisitionController::class, 'approve'])
-                ->middleware('permission:purchases.requisitions.decide')
+                ->middleware('permission:purchases.requisitions.approve|purchases.requisitions.approve_any')
                 ->name('requisitions.approve');
             Route::post('/requisitions/{requisition}/reject', [RequisitionController::class, 'reject'])
-                ->middleware('permission:purchases.requisitions.decide')
+                ->middleware('permission:purchases.requisitions.reject')
                 ->name('requisitions.reject');
 
+            Route::get('/quotes', [QuoteComparisonController::class, 'registrationQueue'])
+                ->middleware('permission:purchases.quotes.view|purchases.quotes.manage|purchases.quotes.award|purchases.quotes.generate_orders')
+                ->name('quotes.queue');
             Route::get('/orders', [PurchaseOrderController::class, 'index'])
-                ->middleware('permission:purchases.orders.view|purchases.orders.create|purchases.orders.approve')
+                ->middleware('permission:purchases.orders.view|purchases.quotes.generate_orders|purchases.orders.approve')
                 ->name('orders.index');
             Route::get('/orders/create', [PurchaseOrderController::class, 'create'])
-                ->middleware('permission:purchases.orders.create')
+                ->middleware('permission:purchases.quotes.generate_orders')
                 ->name('orders.create');
-            Route::post('/orders', [PurchaseOrderController::class, 'store'])
-                ->middleware('permission:purchases.orders.create')
-                ->name('orders.store');
+            Route::get('/requisitions/{requisition}/quotes', [QuoteComparisonController::class, 'index'])
+                ->middleware('permission:purchases.quotes.view|purchases.quotes.award|purchases.quotes.generate_orders')
+                ->name('quotes.index');
+            Route::get('/requisitions/{requisition}/quotes/register', [QuoteComparisonController::class, 'register'])
+                ->middleware('permission:purchases.quotes.manage')
+                ->name('quotes.register');
+            Route::post('/requisitions/{requisition}/quotes', [QuoteComparisonController::class, 'store'])
+                ->middleware('permission:purchases.quotes.manage')
+                ->name('quotes.store');
+            Route::post('/requisitions/{requisition}/quotes/select', [QuoteComparisonController::class, 'select'])
+                ->middleware('permission:purchases.quotes.award')
+                ->name('quotes.select');
+            Route::post('/requisitions/{requisition}/quotes/generate-orders', [QuoteComparisonController::class, 'generateOrders'])
+                ->middleware('permission:purchases.quotes.generate_orders')
+                ->name('quotes.generate-orders');
             Route::get('/orders/{purchaseOrder}', [PurchaseOrderController::class, 'show'])
-                ->middleware('permission:purchases.orders.view|purchases.orders.create|purchases.orders.approve')
+                ->middleware('permission:purchases.orders.view|purchases.quotes.generate_orders|purchases.orders.approve')
                 ->name('orders.show');
             Route::post('/orders/{purchaseOrder}/approve', [PurchaseOrderController::class, 'approve'])
                 ->middleware('permission:purchases.orders.approve')
@@ -165,8 +191,36 @@ Route::middleware(['auth', 'active'])->group(function () {
         });
 
     Route::prefix('inventory')->name('inventory.')
-        ->middleware('permission:inventory.receipts.view|inventory.receipts.create|inventory.issues.view|inventory.issues.create|inventory.movements.view')
+        ->middleware('permission:inventory.receipts.view|inventory.receipts.create|inventory.issues.view|inventory.issues.create|inventory.requisitions.dispatch|inventory.movements.view|inventory.requisitions.view|inventory.requisitions.manage|inventory.requisitions.submit|purchases.requisitions.view')
         ->group(function () {
+            Route::get('/requisitions', [RequisitionController::class, 'inventoryIndex'])
+                ->middleware('permission:inventory.requisitions.view|inventory.requisitions.manage|inventory.requisitions.submit|inventory.requisitions.dispatch|inventory.issues.create')
+                ->name('requisitions.index');
+            Route::get('/requisitions/create', [RequisitionController::class, 'create'])
+                ->middleware('permission:inventory.requisitions.manage')
+                ->name('requisitions.create');
+            Route::post('/requisitions', [RequisitionController::class, 'store'])
+                ->middleware('permission:inventory.requisitions.manage')
+                ->name('requisitions.store');
+            Route::get('/requisitions/{requisition}/edit', [RequisitionController::class, 'edit'])
+                ->middleware('permission:inventory.requisitions.manage')
+                ->name('requisitions.edit');
+            Route::put('/requisitions/{requisition}', [RequisitionController::class, 'update'])
+                ->middleware('permission:inventory.requisitions.manage')
+                ->name('requisitions.update');
+            Route::post('/requisitions/{requisition}/submit', [RequisitionController::class, 'submit'])
+                ->middleware('permission:inventory.requisitions.submit')
+                ->name('requisitions.submit');
+            Route::post('/requisitions/{requisition}/activate', [RequisitionController::class, 'activate'])
+                ->middleware('permission:inventory.requisitions.manage')
+                ->name('requisitions.activate');
+            Route::post('/requisitions/{requisition}/cancel', [RequisitionController::class, 'cancel'])
+                ->middleware('permission:inventory.requisitions.manage')
+                ->name('requisitions.cancel');
+            Route::get('/requisitions/{requisition}', [RequisitionController::class, 'show'])
+                ->middleware('permission:inventory.requisitions.view|inventory.requisitions.manage|inventory.requisitions.submit|inventory.requisitions.dispatch|purchases.requisitions.view|purchases.requisitions.approve|purchases.requisitions.reject')
+                ->name('requisitions.show');
+
             Route::get('/kardex/export', [InventoryMovementController::class, 'exportKardex'])
                 ->middleware('permission:inventory.movements.view')
                 ->name('kardex.export');
@@ -189,13 +243,13 @@ Route::middleware(['auth', 'active'])->group(function () {
                 ->middleware('permission:inventory.issues.view|inventory.issues.create')
                 ->name('issues.index');
             Route::get('/issues/create', [InventoryMovementController::class, 'createIssue'])
-                ->middleware('permission:inventory.issues.create')
+                ->middleware('permission:inventory.issues.create|inventory.requisitions.dispatch')
                 ->name('issues.create');
             Route::get('/issues/{issue}', [InventoryMovementController::class, 'showIssue'])
                 ->middleware('permission:inventory.issues.view|inventory.issues.create')
                 ->name('issues.show');
             Route::post('/issues', [InventoryMovementController::class, 'storeIssue'])
-                ->middleware('permission:inventory.issues.create')
+                ->middleware('permission:inventory.issues.create|inventory.requisitions.dispatch')
                 ->name('issues.store');
         });
 });

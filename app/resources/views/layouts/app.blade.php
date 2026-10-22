@@ -50,6 +50,11 @@
                     'breadcrumb' => 'Áreas solicitantes',
                     'description' => 'Configura las áreas y sus responsables de aprobación.',
                 ],
+                request()->routeIs('admin.catalogs.products.import*') => [
+                    'section' => 'DATOS MAESTROS',
+                    'breadcrumb' => 'Importación de datos maestros',
+                    'description' => 'Carga productos desde un archivo CSV o Excel sin reemplazar los registros existentes.',
+                ],
                 request()->routeIs('admin.catalogs.products.*') => [
                     'section' => 'DATOS MAESTROS',
                     'breadcrumb' => 'Productos',
@@ -64,6 +69,11 @@
                     'section' => 'DATOS MAESTROS',
                     'breadcrumb' => 'Proveedores',
                     'description' => 'Consulta y administra el directorio de proveedores.',
+                ],
+                request()->routeIs('admin.catalogs.supplier-evaluations.*') => [
+                    'section' => 'DATOS MAESTROS',
+                    'breadcrumb' => 'Calificación de proveedores',
+                    'description' => 'Registra evaluaciones de distancia, tiempo de entrega y cumplimiento; cada evaluación conserva su historial.',
                 ],
                 request()->routeIs('admin.users.*') => [
                     'section' => 'ADMINISTRACIÓN',
@@ -80,10 +90,40 @@
                     'breadcrumb' => 'Auditoría',
                     'description' => 'Consulta el historial de cambios administrativos.',
                 ],
+                request()->routeIs('inventory.kardex') => [
+                    'section' => 'INVENTARIO',
+                    'breadcrumb' => 'Kardex',
+                    'description' => 'Consulta en un mismo informe todos los movimientos de las bodegas y productos a los que tienes acceso. Los filtros son opcionales y el saldo se calcula por producto y bodega.',
+                ],
+                request()->routeIs('inventory.requisitions.*') => [
+                    'section' => 'INVENTARIO',
+                    'breadcrumb' => 'Requisiciones',
+                    'description' => 'Gestiona borradores, envía solicitudes a aprobación y registra las salidas parciales de inventario.',
+                ],
+                request()->routeIs('purchasing.orders.*') => [
+                    'section' => 'COMPRAS',
+                    'breadcrumb' => 'Órdenes de compra',
+                    'description' => 'Consulta las órdenes de compra generadas y revisa su estado.',
+                ],
                 request()->routeIs('purchasing.requisitions.*') => [
                     'section' => 'COMPRAS',
                     'breadcrumb' => 'Requisiciones',
                     'description' => 'Consulta y gestiona las solicitudes de compra.',
+                ],
+                request()->routeIs('purchasing.quotes.queue') => [
+                    'section' => 'COMPRAS',
+                    'breadcrumb' => 'Registrar cotización',
+                    'description' => 'Selecciona una requisición aprobada para registrar cotizaciones de proveedores.',
+                ],
+                request()->routeIs('purchasing.quotes.register') => [
+                    'section' => 'COMPRAS',
+                    'breadcrumb' => 'Registrar cotización',
+                    'description' => 'Captura una cotización de proveedor para la requisición seleccionada.',
+                ],
+                request()->routeIs('purchasing.quotes.index') => [
+                    'section' => 'COMPRAS',
+                    'breadcrumb' => 'Comparación de cotizaciones',
+                    'description' => 'Compara ofertas por producto y genera órdenes de compra por etapas.',
                 ],
                 request()->routeIs('profile.*') => [
                     'section' => 'CUENTA',

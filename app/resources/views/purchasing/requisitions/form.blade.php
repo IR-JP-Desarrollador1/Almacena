@@ -13,7 +13,7 @@
     <x-slot name="header"><h1 class="text-xl font-semibold text-gray-800">{{ $requisition->exists ? __('Editar requisición').' '.$requisition->reference : __('Nueva requisición') }}</h1></x-slot>
     <main class="mx-auto max-w-5xl space-y-5 px-4 py-8 sm:px-6 lg:px-8">
         <div class="rounded-lg bg-white p-6 shadow">
-            <form method="POST" action="{{ $requisition->exists ? route('purchasing.requisitions.update', $requisition) : route('purchasing.requisitions.store') }}" x-data="{ products: @js($productOptions), items: @js($initialItems) }">
+            <form method="POST" action="{{ $requisition->exists ? route(request()->routeIs('inventory.requisitions.*') ? 'inventory.requisitions.update' : 'purchasing.requisitions.update', $requisition) : route(request()->routeIs('inventory.requisitions.*') ? 'inventory.requisitions.store' : 'purchasing.requisitions.store') }}" x-data="{ products: @js($productOptions), items: @js($initialItems) }">
                 @csrf
                 @if ($requisition->exists) @method('PUT') @endif
                 <div class="grid gap-5 md:grid-cols-2">
@@ -42,14 +42,14 @@
                         <div class="mt-4 rounded-md border border-gray-200 p-4">
                             <div class="grid gap-4 md:grid-cols-12">
                                 <div class="md:col-span-6"><x-input-label :value="__('Producto')" /><select x-model="item.product_id" :name="'items[' + index + '][product_id]'" required class="mt-1 block w-full rounded-md border-gray-300 shadow-sm"><option value="">{{ __('Seleccione producto') }}</option><template x-for="product in products" :key="product.id"><option :value="product.id" x-text="product.code + ' — ' + product.name + ' (' + product.unit + ')'"></option></template></select><x-input-error :messages="$errors->get('items.*.product_id')" class="mt-2" /></div>
-                                <div class="md:col-span-2"><x-input-label :value="__('Cantidad')" /><x-text-input type="number" min="0.001" step="0.001" x-model="item.quantity" :name="'items[' + index + '][quantity]'" required class="mt-1 block w-full" /><x-input-error :messages="$errors->get('items.*.quantity')" class="mt-2" /></div>
-                                <div class="md:col-span-3"><x-input-label :value="__('Nota (opcional)')" /><x-text-input x-model="item.notes" :name="'items[' + index + '][notes]'" class="mt-1 block w-full" /></div>
+                                <div class="md:col-span-2"><x-input-label :value="__('Cantidad')" /><x-text-input type="number" min="0.001" step="0.001" x-model="item.quantity" ::name="'items[' + index + '][quantity]'" required class="mt-1 block w-full" /><x-input-error :messages="$errors->get('items.*.quantity')" class="mt-2" /></div>
+                                <div class="md:col-span-3"><x-input-label :value="__('Nota (opcional)')" /><x-text-input x-model="item.notes" ::name="'items[' + index + '][notes]'" class="mt-1 block w-full" /></div>
                                 <div class="flex items-end md:col-span-1"><button type="button" x-show="items.length > 1" @click="items.splice(index, 1)" class="text-sm text-red-700 underline">{{ __('Quitar') }}</button></div>
                             </div>
                         </div>
                     </template>
                 </fieldset>
-                <div class="mt-6 flex flex-wrap gap-3">@if ($department?->is_active)<x-primary-button>{{ $requisition->exists ? __('Guardar borrador') : __('Crear borrador') }}</x-primary-button>@else<p class="text-sm text-red-700">{{ __('Solicita al administrador que te asigne a un área activa antes de crear requisiciones.') }}</p>@endif<a href="{{ route('purchasing.requisitions.index') }}" class="text-sm text-gray-600 underline">{{ __('Cancelar') }}</a></div>
+                <div class="mt-6 flex flex-wrap gap-3">@if ($department?->is_active)<x-primary-button>{{ $requisition->exists ? __('Guardar borrador') : __('Crear borrador') }}</x-primary-button>@else<p class="text-sm text-red-700">{{ __('Solicita al administrador que te asigne a un área activa antes de crear requisiciones.') }}</p>@endif<a href="{{ route(request()->routeIs('inventory.requisitions.*') ? 'inventory.requisitions.index' : 'purchasing.requisitions.index') }}" class="text-sm text-gray-600 underline">{{ __('Cancelar') }}</a></div>
             </form>
         </div>
     </main>

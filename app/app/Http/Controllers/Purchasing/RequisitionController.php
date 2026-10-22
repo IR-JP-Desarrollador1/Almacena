@@ -10,6 +10,7 @@ use App\Models\Product;
 use App\Models\Requisition;
 use App\Models\RequisitionItem;
 use App\Models\User;
+use App\Support\DecimalMath;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Http\Exceptions\HttpResponseException;
 use Illuminate\Http\RedirectResponse;
@@ -29,6 +30,7 @@ class RequisitionController extends Controller
         $user = $request->user();
         $query = Requisition::query()
             ->whereHas('department', fn ($query) => $query->where('company_id', $company->id))
+            ->whereIn('status', [Requisition::STATUS_PENDING_APPROVAL, Requisition::STATUS_APPROVED])
             ->with(['department', 'requester', 'approver', 'warehouse.branch'])
             ->latest();
 
@@ -40,12 +42,63 @@ class RequisitionController extends Controller
             $query->whereIn('warehouse_id', $user->accessibleWarehouses()->select('warehouses.id'));
         }
 
-        if (! $user->hasPermission('purchases.requisitions.view')) {
+        if (
+            ! $user->hasPermission('purchases.requisitions.view')
+            || (
+                ($user->hasPermission('inventory.requisitions.manage') || $user->hasPermission('inventory.requisitions.submit'))
+                && ! $user->hasPermission('purchases.requisitions.approve')
+                && ! $user->hasPermission('purchases.requisitions.reject')
+            )
+        ) {
             $query->where(fn ($query) => $query->where('requester_user_id', $user->id)->orWhere('approver_user_id', $user->id));
         }
 
         return view('purchasing.requisitions.index', [
             'requisitions' => $query->paginate(20),
+            'inventoryContext' => false,
+        ]);
+    }
+
+    public function inventoryIndex(Request $request): View
+    {
+        $company = $this->company();
+        $user = $request->user();
+        $query = Requisition::query()
+            ->whereHas('department', fn ($departments) => $departments->where('company_id', $company->id))
+            ->whereIn('status', [
+                Requisition::STATUS_DRAFT,
+                Requisition::STATUS_ACTIVE,
+                Requisition::STATUS_REJECTED,
+                Requisition::STATUS_CANCELLED,
+            ])
+            ->whereIn('warehouse_id', $user->accessibleWarehouses()->select('warehouses.id'))
+            ->with(['department', 'requester', 'approver', 'warehouse.branch'])
+            ->latest();
+
+        if (
+            (
+                ! $user->hasPermission('purchases.requisitions.view')
+                && ! $user->hasPermission('inventory.requisitions.view')
+            )
+            || (
+                ($user->hasPermission('inventory.requisitions.manage') || $user->hasPermission('inventory.requisitions.submit'))
+                && ! $user->hasPermission('purchases.requisitions.approve')
+                && ! $user->hasPermission('purchases.requisitions.reject')
+            )
+        ) {
+            $query->where(fn (Builder $scope) => $scope
+                ->where('requester_user_id', $user->id)
+                ->when(
+                    $user->hasPermission('inventory.issues.create')
+                        || $user->hasPermission('inventory.requisitions.dispatch')
+                        || $user->hasPermission('inventory.requisitions.view'),
+                    fn (Builder $scope) => $scope->orWhere('status', Requisition::STATUS_ACTIVE),
+                ));
+        }
+
+        return view('purchasing.requisitions.index', [
+            'requisitions' => $query->paginate(20),
+            'inventoryContext' => true,
         ]);
     }
 
@@ -84,7 +137,9 @@ class RequisitionController extends Controller
             return $requisition;
         });
 
-        return redirect()->route('purchasing.requisitions.show', $requisition)->with('status', __('Borrador de requisición creado.'));
+        $route = $request->routeIs('inventory.requisitions.store') ? 'inventory.requisitions.show' : 'purchasing.requisitions.show';
+
+        return redirect()->route($route, $requisition)->with('status', __('Borrador de requisición creado.'));
     }
 
     public function show(Request $request, Requisition $requisition): View
@@ -96,14 +151,19 @@ class RequisitionController extends Controller
             'requester',
             'approver',
             'warehouse',
-            'purchaseOrder',
+            'purchaseOrders.supplier',
             'inventoryIssues',
             'items.product',
             'items.unit',
+            'items.inventoryIssueItems',
+            'items.award.quoteItem.quote.supplier',
         ]);
         $this->authorizeView($request, $requisition);
 
-        return view('purchasing.requisitions.show', compact('requisition'));
+        return view('purchasing.requisitions.show', [
+            'requisition' => $requisition,
+            'inventoryContext' => $request->routeIs('inventory.requisitions.show'),
+        ]);
     }
 
     public function edit(Request $request, Requisition $requisition): View|RedirectResponse
@@ -111,7 +171,11 @@ class RequisitionController extends Controller
         $company = $this->company();
         $requisition = $this->inCompany($requisition->id, $company->id)->load('items');
         $this->authorizeRequester($request, $requisition);
-        abort_unless(in_array($requisition->status, [Requisition::STATUS_DRAFT, Requisition::STATUS_REJECTED], true), 403);
+        abort_unless(
+            in_array($requisition->status, [Requisition::STATUS_DRAFT, Requisition::STATUS_REJECTED], true)
+                && ! $requisition->inventoryIssues()->exists(),
+            403,
+        );
 
         return view('purchasing.requisitions.form', [
             'requisition' => $requisition,
@@ -126,7 +190,11 @@ class RequisitionController extends Controller
         $company = $this->company();
         $requisition = $this->inCompany($requisition->id, $company->id);
         $this->authorizeRequester($request, $requisition);
-        abort_unless(in_array($requisition->status, [Requisition::STATUS_DRAFT, Requisition::STATUS_REJECTED], true), 403);
+        abort_unless(
+            in_array($requisition->status, [Requisition::STATUS_DRAFT, Requisition::STATUS_REJECTED], true)
+                && ! $requisition->inventoryIssues()->exists(),
+            403,
+        );
         $validated = $this->validateRequisition($request);
         $department = $this->requestDepartment($request, $company);
 
@@ -148,15 +216,23 @@ class RequisitionController extends Controller
             $this->audit($request, $company, 'updated', $requisition, $before);
         });
 
-        return redirect()->route('purchasing.requisitions.show', $requisition)->with('status', __('Borrador actualizado. Puedes volver a enviarlo a aprobación.'));
+        $route = $request->routeIs('inventory.requisitions.update') ? 'inventory.requisitions.show' : 'purchasing.requisitions.show';
+
+        return redirect()->route($route, $requisition)->with('status', __('Borrador actualizado. Puedes volver a enviarlo a aprobación.'));
     }
 
     public function submit(Request $request, Requisition $requisition): RedirectResponse
     {
         $company = $this->company();
-        $requisition = $this->inCompany($requisition->id, $company->id)->load('department.manager');
+        $requisition = $this->inCompany($requisition->id, $company->id)->load('department.manager', 'items.inventoryIssueItems');
         $this->authorizeRequester($request, $requisition);
-        abort_unless($requisition->status === Requisition::STATUS_DRAFT, 403);
+        abort_unless($requisition->status === Requisition::STATUS_ACTIVE, 403);
+        abort_unless(
+            $requisition->items->contains(fn (RequisitionItem $item) => DecimalMath::compare((string) $item->quantity, (string) $item->inventoryIssueItems->sum('quantity'), 3) > 0
+            ),
+            409,
+            __('La requisición ya fue despachada por completo; no hay saldo para enviar a Compras.'),
+        );
 
         $manager = $requisition->department->manager;
         if (
@@ -164,13 +240,22 @@ class RequisitionController extends Controller
             || ! $manager
             || $manager->status !== User::STATUS_ACTIVE
             || $manager->id === $request->user()->id
-            || ! $manager->hasPermission('purchases.requisitions.decide')
+            || ! $manager->hasPermission('purchases.requisitions.approve')
             || ! $manager->canAccessWarehouse((int) $requisition->warehouse_id)
         ) {
             return back()->withErrors(['approval' => __('El área debe tener un jefe activo con permiso de aprobación y acceso a la bodega, distinto del solicitante.')]);
         }
 
         DB::transaction(function () use ($request, $company, $requisition, $manager) {
+            $lockedRequisition = Requisition::query()->whereKey($requisition->id)->lockForUpdate()->firstOrFail();
+            abort_unless($lockedRequisition->status === Requisition::STATUS_ACTIVE, 403);
+            abort_unless(
+                $lockedRequisition->items()
+                    ->whereRaw('requisition_items.quantity > (SELECT COALESCE(SUM(inventory_issue_items.quantity), 0) FROM inventory_issue_items WHERE inventory_issue_items.requisition_item_id = requisition_items.id)')
+                    ->exists(),
+                409,
+                __('La requisición ya fue despachada por completo; no hay saldo para enviar a Compras.'),
+            );
             $requisition->update([
                 'approver_user_id' => $manager->id,
                 'status' => Requisition::STATUS_PENDING_APPROVAL,
@@ -180,7 +265,69 @@ class RequisitionController extends Controller
             $this->audit($request, $company, 'submitted', $requisition);
         });
 
-        return redirect()->route('purchasing.requisitions.show', $requisition)->with('status', __('Requisición enviada al jefe del área para aprobación.'));
+        return redirect()->route('purchasing.requisitions.show', $requisition)
+            ->with('status', __('Requisición enviada al jefe del área para aprobación.'));
+    }
+
+    public function activate(Request $request, Requisition $requisition): RedirectResponse
+    {
+        $company = $this->company();
+        $requisition = $this->inCompany($requisition->id, $company->id);
+        $this->authorizeRequester($request, $requisition);
+
+        DB::transaction(function () use ($request, $company, $requisition) {
+            $requisition = Requisition::query()->whereKey($requisition->id)->lockForUpdate()->firstOrFail();
+            abort_unless(
+                in_array($requisition->status, [Requisition::STATUS_DRAFT, Requisition::STATUS_REJECTED], true)
+                    && ! $requisition->inventoryIssues()->exists(),
+                403,
+            );
+            abort_unless($requisition->items()->exists(), 409, __('Agrega al menos un producto antes de activar la requisición.'));
+
+            $before = $this->snapshot($requisition);
+            $requisition->update([
+                'status' => Requisition::STATUS_ACTIVE,
+                'approver_user_id' => null,
+                'rejection_reason' => null,
+                'submitted_at' => null,
+                'decided_at' => null,
+            ]);
+            $this->audit($request, $company, 'activated', $requisition, $before);
+        });
+
+        return redirect()->route('inventory.requisitions.show', $requisition)
+            ->with('status', __('Requisición activada; ya puedes registrar salidas parciales o enviarla a aprobación.'));
+    }
+
+    public function cancel(Request $request, Requisition $requisition): RedirectResponse
+    {
+        $company = $this->company();
+        $requisition = $this->inCompany($requisition->id, $company->id);
+        $this->authorizeRequester($request, $requisition);
+
+        DB::transaction(function () use ($request, $company, $requisition) {
+            $requisition = Requisition::query()->whereKey($requisition->id)->lockForUpdate()->firstOrFail();
+            abort_unless(
+                in_array($requisition->status, [
+                    Requisition::STATUS_DRAFT,
+                    Requisition::STATUS_ACTIVE,
+                    Requisition::STATUS_REJECTED,
+                ], true),
+                403,
+            );
+            abort_unless(
+                ! $requisition->inventoryIssues()->exists(),
+                409,
+                __('No se puede cancelar una requisición que ya tiene salidas registradas.'),
+            );
+
+            $before = $this->snapshot($requisition);
+            $requisition->update(['status' => Requisition::STATUS_CANCELLED]);
+            $this->audit($request, $company, 'cancelled', $requisition, $before);
+        });
+
+        return redirect()->route('inventory.requisitions.show', $requisition)
+            ->with('status', __('Requisición cancelada.'));
     }
 
     public function approve(Request $request, Requisition $requisition): RedirectResponse
@@ -200,14 +347,21 @@ class RequisitionController extends Controller
     private function decide(Request $request, Requisition $requisition, string $status, ?string $reason): RedirectResponse
     {
         $company = $this->company();
-        abort_unless($request->user()->hasPermission('purchases.requisitions.decide'), 403);
+        abort_unless(
+            $request->user()->hasPermission($status === Requisition::STATUS_APPROVED
+                ? 'purchases.requisitions.approve'
+                : 'purchases.requisitions.reject')
+                || ($status === Requisition::STATUS_APPROVED && $request->user()->hasPermission('purchases.requisitions.approve_any')),
+            403,
+        );
         abort_unless(
             $request->user()->canAccessWarehouse((int) $requisition->warehouse_id),
             403,
             __('No tienes acceso a la bodega asociada a esta requisición.'),
         );
 
-        DB::transaction(function () use ($request, $company, $requisition, $status, $reason) {
+        $resultingStatus = $status;
+        DB::transaction(function () use ($request, $company, $requisition, $status, $reason, &$resultingStatus) {
             $requisition = Requisition::query()
                 ->whereKey($requisition->id)
                 ->whereHas('department', fn ($query) => $query->where('company_id', $company->id))
@@ -216,13 +370,25 @@ class RequisitionController extends Controller
 
             abort_unless(
                 $requisition->status === Requisition::STATUS_PENDING_APPROVAL
-                    && $requisition->approver_user_id === $request->user()->id
-                    && $requisition->requester_user_id !== $request->user()->id,
+                    && (
+                        $requisition->approver_user_id === $request->user()->id
+                        || ($status === Requisition::STATUS_APPROVED
+                            && $request->user()->hasPermission('purchases.requisitions.approve_any'))
+                    )
+                    && (
+                        $requisition->requester_user_id !== $request->user()->id
+                        || ($status === Requisition::STATUS_APPROVED
+                            && $request->user()->hasPermission('purchases.requisitions.approve_any'))
+                    ),
                 403,
             );
 
+            $hasIssues = $requisition->inventoryIssues()->exists();
+            $resultingStatus = $status === Requisition::STATUS_REJECTED && $hasIssues
+                ? Requisition::STATUS_ACTIVE
+                : $status;
             $requisition->update([
-                'status' => $status,
+                'status' => $resultingStatus,
                 'rejection_reason' => $reason,
                 'decided_at' => now(),
             ]);
@@ -231,9 +397,15 @@ class RequisitionController extends Controller
 
         $message = $status === Requisition::STATUS_APPROVED
             ? __('Requisición aprobada.')
-            : __('Requisición rechazada; el solicitante podrá corregirla y volver a enviarla.');
+            : ($resultingStatus === Requisition::STATUS_ACTIVE
+                ? __('La compra pendiente fue rechazada; la requisición vuelve a Inventario para reenvío.')
+                : __('Requisición rechazada; el solicitante podrá corregirla y volver a enviarla.'));
 
-        return redirect()->route('purchasing.requisitions.show', $requisition)->with('status', $message);
+        $route = $status === Requisition::STATUS_REJECTED
+            ? 'inventory.requisitions.show'
+            : 'purchasing.requisitions.show';
+
+        return redirect()->route($route, $requisition)->with('status', $message);
     }
 
     private function validateRequisition(Request $request): array
@@ -330,7 +502,22 @@ class RequisitionController extends Controller
         abort_unless(
             $user->hasPermission('purchases.requisitions.view')
                 || $requisition->requester_user_id === $user->id
-                || $requisition->approver_user_id === $user->id,
+                || $requisition->approver_user_id === $user->id
+                || (
+                    ! request()->routeIs('inventory.requisitions.show')
+                        && $requisition->status === Requisition::STATUS_APPROVED
+                        && (
+                            $user->hasPermission('purchases.quotes.view')
+                            || $user->hasPermission('purchases.quotes.manage')
+                            || $user->hasPermission('purchases.quotes.award')
+                            || $user->hasPermission('purchases.quotes.generate_orders')
+                        )
+                )
+                || (
+                    request()->routeIs('inventory.requisitions.show')
+                        && in_array($requisition->status, [Requisition::STATUS_ACTIVE, Requisition::STATUS_APPROVED], true)
+                        && ($user->hasPermission('inventory.issues.create') || $user->hasPermission('inventory.requisitions.dispatch') || $user->hasPermission('inventory.requisitions.view'))
+                ),
             403,
         );
     }

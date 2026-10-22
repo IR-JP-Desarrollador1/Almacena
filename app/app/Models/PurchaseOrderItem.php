@@ -11,6 +11,7 @@ class PurchaseOrderItem extends Model
     protected $fillable = [
         'purchase_order_id',
         'requisition_item_id',
+        'supplier_quote_item_id',
         'product_id',
         'product_code',
         'product_name',
@@ -18,6 +19,9 @@ class PurchaseOrderItem extends Model
         'quantity',
         'unit_cost',
         'unit_cost_base',
+        'tax_rate',
+        'brand',
+        'delivery_days',
     ];
 
     public function purchaseOrder(): BelongsTo
@@ -28,6 +32,11 @@ class PurchaseOrderItem extends Model
     public function requisitionItem(): BelongsTo
     {
         return $this->belongsTo(RequisitionItem::class);
+    }
+
+    public function supplierQuoteItem(): BelongsTo
+    {
+        return $this->belongsTo(SupplierQuoteItem::class);
     }
 
     public function product(): BelongsTo

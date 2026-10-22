@@ -168,7 +168,10 @@ class UserController extends Controller
             $retainsApprovalPermission = Role::query()
                 ->whereIn('id', $roleIds)
                 ->where('is_active', true)
-                ->whereHas('permissions', fn ($query) => $query->where('code', 'purchases.requisitions.decide'))
+                ->whereHas('permissions', fn ($query) => $query->whereIn('code', [
+                    'purchases.requisitions.approve',
+                    'purchases.requisitions.reject',
+                ]))
                 ->exists();
 
             if ($validated['status'] !== User::STATUS_ACTIVE || ! $retainsApprovalPermission) {

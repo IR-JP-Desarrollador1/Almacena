@@ -32,6 +32,9 @@
         @case('product')
             <path d="m10 2.5 7 4v7l-7 4-7-4v-7l7-4Z" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round" /><path d="m3.5 6.5 6.5 4 6.5-4M10 10.5v7" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round" />
             @break
+        @case('import')
+            <path d="M10 2.5v10m0 0 3.5-3.5M10 12.5 6.5 9M3.5 13.5v3a1 1 0 0 0 1 1h11a1 1 0 0 0 1-1v-3" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" />
+            @break
         @case('unit')
             <path d="M3 3h5v5H3zM12 3h5v5h-5zM3 12h5v5H3zM12 12h5v5h-5z" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round" />
             @break

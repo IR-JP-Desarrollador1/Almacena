@@ -27,12 +27,22 @@
                 </a>
             @endif
 
-            @if (Auth::user()->hasPermission('purchases.requisitions.view') || Auth::user()->hasPermission('purchases.requisitions.create') || Auth::user()->hasPermission('purchases.requisitions.decide'))
-                <a class="dashboard-link" href="{{ route('purchasing.requisitions.index') }}">
+            @if (Auth::user()->hasPermission('purchases.requisitions.view') || Auth::user()->hasPermission('purchases.requisitions.approve') || Auth::user()->hasPermission('purchases.requisitions.reject') || Auth::user()->hasPermission('purchases.quotes.view') || Auth::user()->hasPermission('purchases.quotes.manage') || Auth::user()->hasPermission('purchases.quotes.award') || Auth::user()->hasPermission('purchases.quotes.generate_orders'))
+                <a class="dashboard-link" href="{{ Auth::user()->hasPermission('purchases.requisitions.view') || Auth::user()->hasPermission('purchases.requisitions.approve') || Auth::user()->hasPermission('purchases.requisitions.reject') ? route('purchasing.requisitions.index') : route('purchasing.quotes.queue') }}">
                     <span class="dashboard-link-icon" aria-hidden="true">03</span>
                     <span>
                         <strong>{{ __('Compras') }}</strong>
                         <small>{{ __('Da seguimiento a las solicitudes de compra.') }}</small>
+                    </span>
+                    <span class="dashboard-link-arrow" aria-hidden="true">&rarr;</span>
+                </a>
+            @endif
+            @if (Auth::user()->hasPermission('inventory.requisitions.view') || Auth::user()->hasPermission('inventory.requisitions.manage') || Auth::user()->hasPermission('inventory.requisitions.submit') || Auth::user()->hasPermission('inventory.requisitions.dispatch') || Auth::user()->hasPermission('inventory.issues.create'))
+                <a class="dashboard-link" href="{{ route('inventory.requisitions.index') }}">
+                    <span class="dashboard-link-icon" aria-hidden="true">05</span>
+                    <span>
+                        <strong>{{ __('Requisiciones de inventario') }}</strong>
+                        <small>{{ __('Administra borradores y despachos de inventario.') }}</small>
                     </span>
                     <span class="dashboard-link-arrow" aria-hidden="true">&rarr;</span>
                 </a>

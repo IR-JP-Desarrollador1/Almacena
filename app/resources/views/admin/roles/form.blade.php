@@ -37,7 +37,7 @@
                                 @foreach ($modulePermissions as $permission)
                                     <label class="flex items-start gap-2 text-sm">
                                         <input type="checkbox" name="permissions[]" value="{{ $permission->id }}" @checked(in_array((string) $permission->id, array_map('strval', old('permissions', $role->exists ? $role->permissions->pluck('id')->all() : [])), true)) class="mt-1 rounded border-gray-300 text-indigo-600">
-                                        <span><span class="block font-medium text-gray-800">{{ $permission->name }}</span><span class="text-xs text-gray-500">{{ $permission->code }}</span></span>
+                                        <span><span class="block font-medium text-gray-800">{{ $permission->name }}</span><span class="text-xs text-gray-500">{{ $permission->code }}</span>@if ($permission->description)<span class="mt-1 block text-xs text-gray-500">{{ $permission->description }}</span>@endif</span>
                                     </label>
                                 @endforeach
                             </div>

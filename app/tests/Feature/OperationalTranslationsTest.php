@@ -22,9 +22,11 @@ class OperationalTranslationsTest extends TestCase
             'purchasing/requisitions/form.blade.php',
             'purchasing/requisitions/index.blade.php',
             'purchasing/requisitions/show.blade.php',
-            'purchasing/orders/create.blade.php',
             'purchasing/orders/index.blade.php',
             'purchasing/orders/show.blade.php',
+            'purchasing/quotes/index.blade.php',
+            'admin/catalogs/products/import.blade.php',
+            'admin/catalogs/supplier-evaluations/index.blade.php',
         ];
         $translationKeys = [];
 

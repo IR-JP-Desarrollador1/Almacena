@@ -96,7 +96,7 @@ class DepartmentController extends OrganizationAdminController
         return User::query()
             ->where('status', User::STATUS_ACTIVE)
             ->where(function ($query) use ($currentManagerId) {
-                $query->whereHas('roles.permissions', fn ($query) => $query->where('code', 'purchases.requisitions.decide'));
+                $query->whereHas('roles.permissions', fn ($query) => $query->where('code', 'purchases.requisitions.approve'));
 
                 if ($currentManagerId) {
                     $query->orWhere('id', $currentManagerId);
@@ -109,6 +109,6 @@ class DepartmentController extends OrganizationAdminController
     private function ensureEligibleManager(int $userId): void
     {
         $manager = User::query()->whereKey($userId)->where('status', User::STATUS_ACTIVE)->firstOrFail();
-        abort_unless($manager->hasPermission('purchases.requisitions.decide'), 422, __('El jefe asignado debe tener permiso para aprobar requisiciones.'));
+        abort_unless($manager->hasPermission('purchases.requisitions.approve'), 422, __('El jefe asignado debe tener permiso para aprobar requisiciones.'));
     }
 }

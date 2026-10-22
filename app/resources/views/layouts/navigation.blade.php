@@ -4,16 +4,23 @@
     $canDepartments = $user->hasPermission('departments.view') || $user->hasPermission('departments.manage');
     $canCatalogs = $user->hasPermission('catalogs.view') || $user->hasPermission('catalogs.manage');
     $canPurchases = $user->hasPermission('purchases.requisitions.view')
-        || $user->hasPermission('purchases.requisitions.create')
-        || $user->hasPermission('purchases.requisitions.decide')
+        || $user->hasPermission('purchases.requisitions.approve')
+        || $user->hasPermission('purchases.requisitions.reject')
+        || $user->hasPermission('purchases.quotes.view')
+        || $user->hasPermission('purchases.quotes.manage')
+        || $user->hasPermission('purchases.quotes.award')
+        || $user->hasPermission('purchases.quotes.generate_orders')
         || $user->hasPermission('purchases.orders.view')
-        || $user->hasPermission('purchases.orders.create')
         || $user->hasPermission('purchases.orders.approve');
     $canInventory = $user->hasPermission('inventory.receipts.view')
         || $user->hasPermission('inventory.receipts.create')
         || $user->hasPermission('inventory.issues.view')
         || $user->hasPermission('inventory.issues.create')
-        || $user->hasPermission('inventory.movements.view');
+        || $user->hasPermission('inventory.requisitions.dispatch')
+        || $user->hasPermission('inventory.movements.view')
+        || $user->hasPermission('inventory.requisitions.view')
+        || $user->hasPermission('inventory.requisitions.manage')
+        || $user->hasPermission('inventory.requisitions.submit');
     $canAdministration = $user->hasPermission('users.view')
         || $user->hasPermission('roles.manage')
         || $user->hasPermission('companies.manage')
@@ -48,13 +55,19 @@
                     <svg viewBox="0 0 16 16" fill="none" aria-hidden="true"><path d="m4 6 4 4 4-4" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" /></svg>
                 </button>
                 <div class="nav-group-items" id="nav-group-purchases">
-                    @if ($user->hasPermission('purchases.requisitions.view') || $user->hasPermission('purchases.requisitions.create') || $user->hasPermission('purchases.requisitions.decide'))
+                    @if ($user->hasPermission('purchases.requisitions.view') || $user->hasPermission('purchases.requisitions.approve') || $user->hasPermission('purchases.requisitions.reject'))
                         <a class="nav-link {{ request()->routeIs('purchasing.requisitions.*') ? 'nav-link-active' : '' }}" href="{{ route('purchasing.requisitions.index') }}">
                             <x-nav-icon name="purchases" />
                             <span>{{ __('Requisiciones') }}</span>
                         </a>
                     @endif
-                    @if ($user->hasPermission('purchases.orders.view') || $user->hasPermission('purchases.orders.create') || $user->hasPermission('purchases.orders.approve'))
+                    @if ($user->hasPermission('purchases.quotes.view') || $user->hasPermission('purchases.quotes.manage') || $user->hasPermission('purchases.quotes.award') || $user->hasPermission('purchases.quotes.generate_orders'))
+                        <a class="nav-link {{ request()->routeIs('purchasing.quotes.*') ? 'nav-link-active' : '' }}" href="{{ route('purchasing.quotes.queue') }}">
+                            <x-nav-icon name="receipt" />
+                            <span>{{ __('Cotizaciones') }}</span>
+                        </a>
+                    @endif
+                    @if ($user->hasPermission('purchases.orders.view') || $user->hasPermission('purchases.quotes.generate_orders') || $user->hasPermission('purchases.orders.approve'))
                         <a class="nav-link {{ request()->routeIs('purchasing.orders.*') ? 'nav-link-active' : '' }}" href="{{ route('purchasing.orders.index') }}">
                             <x-nav-icon name="receipt" />
                             <span>{{ __('Órdenes de compra') }}</span>
@@ -71,6 +84,11 @@
                     <svg viewBox="0 0 16 16" fill="none" aria-hidden="true"><path d="m4 6 4 4 4-4" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" /></svg>
                 </button>
                 <div class="nav-group-items" id="nav-group-inventory">
+                    @if ($user->hasPermission('inventory.requisitions.view') || $user->hasPermission('inventory.requisitions.manage') || $user->hasPermission('inventory.requisitions.submit') || $user->hasPermission('inventory.requisitions.dispatch') || $user->hasPermission('inventory.issues.create'))
+                        <a class="nav-link {{ request()->routeIs('inventory.requisitions.*') ? 'nav-link-active' : '' }}" href="{{ route('inventory.requisitions.index') }}">
+                            <x-nav-icon name="purchases" /><span>{{ __('Requisiciones') }}</span>
+                        </a>
+                    @endif
                     @if ($user->hasPermission('inventory.movements.view'))
                         <a class="nav-link {{ request()->routeIs('inventory.kardex') ? 'nav-link-active' : '' }}" href="{{ route('inventory.kardex') }}">
                             <x-nav-icon name="receipt" /><span>{{ __('Kardex') }}</span>
@@ -127,15 +145,25 @@
                     <svg viewBox="0 0 16 16" fill="none" aria-hidden="true"><path d="m4 6 4 4 4-4" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" /></svg>
                 </button>
                 <div class="nav-group-items" id="nav-group-catalogs">
-                    <a class="nav-link {{ request()->routeIs('admin.catalogs.products.*') ? 'nav-link-active' : '' }}" href="{{ route('admin.catalogs.products.index') }}">
+                    <a class="nav-link {{ ! request()->routeIs('admin.catalogs.products.import*') && request()->routeIs('admin.catalogs.products.*') ? 'nav-link-active' : '' }}" href="{{ route('admin.catalogs.products.index') }}">
                         <x-nav-icon name="product" /><span>{{ __('Productos') }}</span>
                     </a>
+                    @if ($user->hasPermission('catalogs.manage'))
+                        <a class="nav-link {{ request()->routeIs('admin.catalogs.products.import*') ? 'nav-link-active' : '' }}" href="{{ route('admin.catalogs.products.import.form') }}">
+                            <x-nav-icon name="import" /><span>{{ __('Importación de datos maestros') }}</span>
+                        </a>
+                    @endif
                     <a class="nav-link {{ request()->routeIs('admin.catalogs.units.*') ? 'nav-link-active' : '' }}" href="{{ route('admin.catalogs.units.index') }}">
                         <x-nav-icon name="unit" /><span>{{ __('Unidades') }}</span>
                     </a>
                     <a class="nav-link {{ request()->routeIs('admin.catalogs.suppliers.*') ? 'nav-link-active' : '' }}" href="{{ route('admin.catalogs.suppliers.index') }}">
                         <x-nav-icon name="supplier" /><span>{{ __('Proveedores') }}</span>
                     </a>
+                    @if ($user->hasPermission('catalogs.manage'))
+                        <a class="nav-link {{ request()->routeIs('admin.catalogs.supplier-evaluations.*') ? 'nav-link-active' : '' }}" href="{{ route('admin.catalogs.supplier-evaluations.index') }}">
+                            <x-nav-icon name="supplier" /><span>{{ __('Calificación de proveedores') }}</span>
+                        </a>
+                    @endif
                     <a class="nav-link {{ request()->routeIs('admin.catalogs.currencies.*') ? 'nav-link-active' : '' }}" href="{{ route('admin.catalogs.currencies.index') }}">
                         <x-nav-icon name="currency" /><span>{{ __('Monedas') }}</span>
                     </a>

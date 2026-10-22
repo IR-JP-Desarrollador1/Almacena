@@ -7,6 +7,7 @@ use App\Models\AuditLog;
 use App\Models\Company;
 use App\Models\Currency;
 use App\Models\PurchaseOrder;
+use App\Models\SupplierQuote;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -51,12 +52,15 @@ class CompanyController extends Controller
                 $company = Company::query()->whereKey($company->id)->lockForUpdate()->firstOrFail();
                 if (
                     (int) $company->base_currency_id !== (int) $validated['base_currency_id']
-                    && PurchaseOrder::query()
-                        ->whereHas('requisition.department', fn ($query) => $query->where('company_id', $company->id))
-                        ->exists()
+                    && (
+                        SupplierQuote::query()->exists()
+                        || PurchaseOrder::query()
+                            ->whereHas('requisition.department', fn ($query) => $query->where('company_id', $company->id))
+                            ->exists()
+                    )
                 ) {
                     throw ValidationException::withMessages([
-                        'base_currency_id' => __('La moneda base no se puede cambiar después de crear órdenes de compra.'),
+                        'base_currency_id' => __('La moneda base no se puede cambiar después de registrar cotizaciones u órdenes de compra.'),
                     ]);
                 }
                 $before = $company->only(array_keys($validated));

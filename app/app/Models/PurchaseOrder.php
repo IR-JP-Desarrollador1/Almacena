@@ -15,6 +15,7 @@ class PurchaseOrder extends Model
     protected $fillable = [
         'reference',
         'requisition_id',
+        'supplier_quote_id',
         'supplier_id',
         'quote_currency_id',
         'base_currency_id',
@@ -46,6 +47,11 @@ class PurchaseOrder extends Model
     public function supplier(): BelongsTo
     {
         return $this->belongsTo(Supplier::class);
+    }
+
+    public function supplierQuote(): BelongsTo
+    {
+        return $this->belongsTo(SupplierQuote::class);
     }
 
     public function quoteCurrency(): BelongsTo

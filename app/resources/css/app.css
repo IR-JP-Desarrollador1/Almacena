@@ -61,6 +61,47 @@
     line-height: 1.6;
 }
 
+.quote-submit-bar {
+    position: sticky;
+    z-index: 3;
+    bottom: 0;
+    display: flex;
+    justify-content: flex-end;
+    margin: 0 -20px -20px;
+    padding: 13px 20px;
+    background: rgb(255 255 255 / 96%);
+    border-top: 1px solid #e2e9e2;
+    box-shadow: 0 -8px 22px rgb(24 58 51 / 9%);
+    backdrop-filter: blur(10px);
+}
+
+.quote-submit-button {
+    min-width: 220px;
+    min-height: 46px;
+}
+
+.quote-submit-button.button.button-primary {
+    background-color: var(--color-forest);
+    box-shadow: 0 7px 16px rgb(24 58 51 / 16%);
+    transition: background-color 160ms ease, box-shadow 160ms ease, transform 160ms ease;
+}
+
+.quote-submit-button.button.button-primary:hover:not(:disabled) {
+    background-color: var(--color-forest-dark);
+    box-shadow: 0 9px 20px rgb(24 58 51 / 20%);
+    transform: translateY(-1px);
+}
+
+.quote-submit-button.button.button-primary:focus-visible {
+    outline: 3px solid rgb(67 125 91 / 35%);
+    outline-offset: 3px;
+}
+
+.quote-submit-button.button.button-primary:disabled {
+    cursor: not-allowed;
+    opacity: 0.6;
+}
+
 .page-container > main {
     width: 100%;
     margin: 0 auto;
@@ -489,6 +530,16 @@ body.admin-form-open {
 }
 
 @media (max-width: 560px) {
+    .quote-submit-bar {
+        margin-right: -20px;
+        margin-left: -20px;
+        padding: 12px 20px;
+    }
+
+    .quote-submit-button {
+        width: 100%;
+    }
+
     .admin-form-dialog {
         width: calc(100% - 20px);
         max-height: calc(100dvh - 20px);

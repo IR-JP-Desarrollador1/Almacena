@@ -1,0 +1,8 @@
+code,name,description,unit_code,tracks_expiration,is_active
+DEMO-100,Guantes de nitrilo,Caja de 100 unidades,BOX,sí,activo
+DEMO-200,Alcohol isopropílico,Frasco de 1 litro,L,sí,activo
+DEMO-100,Duplicado dentro del archivo,Caja de 100 unidades,BOX,no,activo
+EXISTING,Producto ya existente,No debe reemplazarse,BOX,no,activo
+DEMO-ERR-UNIT,Unidad desconocida,Debe reportar un error,UNKNOWN,no,activo
+DEMO-ERR-OFF,Unidad inactiva,Producto activo no permitido,OFF,sí,activo
+DEMO-300,Repuesto descontinuado,Producto inactivo permitido,OFF,no,inactivo

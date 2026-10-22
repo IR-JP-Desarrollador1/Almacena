@@ -43,4 +43,14 @@ class RequisitionItem extends Model
     {
         return $this->hasMany(InventoryIssueItem::class);
     }
+
+    public function supplierQuoteItems(): HasMany
+    {
+        return $this->hasMany(SupplierQuoteItem::class);
+    }
+
+    public function award(): \Illuminate\Database\Eloquent\Relations\HasOne
+    {
+        return $this->hasOne(RequisitionItemAward::class);
+    }
 }

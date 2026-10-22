@@ -9,6 +9,20 @@ use PHPUnit\Framework\TestCase;
 
 class DecimalMathTest extends TestCase
 {
+    public function test_adds_decimal_strings_without_floating_point_rounding(): void
+    {
+        $this->assertSame('1.19000000', DecimalMath::add('1.00000000', 8, '0.19000000', 8, 8));
+        $this->assertSame('10.01', DecimalMath::add('9.999', 3, '0.006', 3, 2));
+        $this->assertSame('0.00', DecimalMath::add('0', 0, '0', 0, 2));
+    }
+
+    public function test_compares_non_negative_decimal_strings_at_requested_scale(): void
+    {
+        $this->assertSame(-1, DecimalMath::compare('9.9999', '10.0000', 4));
+        $this->assertSame(0, DecimalMath::compare('4.5000', '4.5', 4));
+        $this->assertSame(1, DecimalMath::compare('100.0000', '99.9999', 4));
+    }
+
     #[DataProvider('multiplicationCases')]
     public function test_it_multiplies_and_rounds_decimal_strings(
         string $left,

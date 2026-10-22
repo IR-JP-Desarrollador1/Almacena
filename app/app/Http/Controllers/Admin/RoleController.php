@@ -102,8 +102,17 @@ class RoleController extends Controller
                     'departments.view',
                     'departments.manage',
                     'purchases.requisitions.view',
-                    'purchases.requisitions.create',
-                    'purchases.requisitions.decide',
+                    'purchases.requisitions.approve',
+                    'purchases.requisitions.approve_any',
+                    'purchases.requisitions.reject',
+                    'purchases.quotes.view',
+                    'purchases.quotes.manage',
+                    'purchases.quotes.award',
+                    'purchases.quotes.generate_orders',
+                    'inventory.requisitions.view',
+                    'inventory.requisitions.manage',
+                    'inventory.requisitions.submit',
+                    'inventory.requisitions.dispatch',
                 ])
                 ->pluck('id')
                 ->map(fn ($id) => (int) $id);

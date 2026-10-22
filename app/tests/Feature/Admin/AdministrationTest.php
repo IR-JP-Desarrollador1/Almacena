@@ -343,7 +343,15 @@ class AdministrationTest extends TestCase
         $this->get(route('admin.users.create'))->assertOk();
         $this->get(route('admin.users.edit', $user))->assertOk();
         $this->get(route('admin.roles.index'))->assertOk();
-        $this->get(route('admin.roles.create'))->assertOk();
+        $this->get(route('admin.roles.create'))
+            ->assertOk()
+            ->assertSee('inventory.requisitions.view')
+            ->assertSee('inventory.requisitions.manage')
+            ->assertSee('inventory.requisitions.submit')
+            ->assertSee('inventory.requisitions.dispatch')
+            ->assertSee('purchases.requisitions.approve')
+            ->assertSee('purchases.quotes.generate_orders')
+            ->assertSee('Crear, editar, activar y cancelar las requisiciones propias.');
         $this->get(route('admin.roles.edit', Role::query()->where('slug', 'administracion')->firstOrFail()))->assertOk();
         $this->get(route('admin.company.edit'))->assertOk();
         $this->get(route('admin.catalogs.currencies.index'))->assertOk();
@@ -523,6 +531,7 @@ class AdministrationTest extends TestCase
     public function test_administrator_profile_cannot_lose_core_administration_permissions(): void
     {
         $role = Role::query()->where('slug', 'administracion')->firstOrFail();
+        $this->assertTrue($role->permissions()->where('code', 'purchases.requisitions.approve_any')->exists());
 
         $this->actingAs($this->administrator)->put(route('admin.roles.update', $role), [
             'name' => $role->name,
@@ -534,5 +543,83 @@ class AdministrationTest extends TestCase
         ])->assertSessionHasErrors('permissions');
 
         $this->assertTrue($role->fresh()->permissions()->where('code', 'roles.manage')->exists());
+    }
+
+    public function test_default_profiles_separate_inventory_requisition_management_from_purchasing_approval(): void
+    {
+        $requester = Role::query()->where('slug', 'solicitante')->firstOrFail();
+        $warehouse = Role::query()->where('slug', 'almacen')->firstOrFail();
+        $purchasing = Role::query()->where('slug', 'compras')->firstOrFail();
+
+        $this->assertTrue($requester->permissions()->where('code', 'inventory.requisitions.manage')->exists());
+        $this->assertTrue($requester->permissions()->where('code', 'inventory.requisitions.submit')->exists());
+        $this->assertFalse($requester->permissions()->where('code', 'purchases.requisitions.view')->exists());
+        $this->assertFalse(Permission::query()->where('code', 'purchases.requisitions.create')->exists());
+        $this->assertTrue($warehouse->permissions()->where('code', 'inventory.requisitions.view')->exists());
+        $this->assertTrue($warehouse->permissions()->where('code', 'inventory.requisitions.dispatch')->exists());
+        $this->assertFalse($warehouse->permissions()->where('code', 'inventory.requisitions.manage')->exists());
+        $this->assertTrue($purchasing->permissions()->where('code', 'purchases.requisitions.view')->exists());
+        $this->assertTrue($purchasing->permissions()->where('code', 'purchases.requisitions.approve')->exists());
+        $this->assertTrue($purchasing->permissions()->where('code', 'purchases.requisitions.reject')->exists());
+        $this->assertTrue($purchasing->permissions()->where('code', 'purchases.quotes.manage')->exists());
+        $this->assertTrue($purchasing->permissions()->where('code', 'purchases.quotes.award')->exists());
+        $this->assertTrue($purchasing->permissions()->where('code', 'purchases.quotes.generate_orders')->exists());
+        $this->assertFalse(Permission::query()->where('code', 'purchases.requisitions.decide')->exists());
+        $this->assertFalse($purchasing->permissions()->where('code', 'inventory.requisitions.manage')->exists());
+    }
+
+    public function test_access_control_seeder_migrates_legacy_requisition_creation_permission(): void
+    {
+        $role = Role::create([
+            'name' => 'Perfil antiguo de requisiciones',
+            'slug' => 'perfil-antiguo-requisiciones',
+            'is_active' => true,
+        ]);
+        $legacyPermission = Permission::create([
+            'name' => 'Crear requisiciones',
+            'code' => 'purchases.requisitions.create',
+            'module' => 'compras',
+        ]);
+        $role->permissions()->attach($legacyPermission);
+
+        $this->seed(AccessControlSeeder::class);
+
+        $this->assertTrue($role->fresh()->permissions()->where('code', 'inventory.requisitions.manage')->exists());
+        $this->assertTrue($role->fresh()->permissions()->where('code', 'inventory.requisitions.submit')->exists());
+        $this->assertFalse(Permission::query()->where('code', 'purchases.requisitions.create')->exists());
+    }
+
+    public function test_access_control_seeder_migrates_legacy_approval_and_workflow_permissions(): void
+    {
+        $role = Role::create([
+            'name' => 'Perfil previo de flujos',
+            'slug' => 'perfil-previo-flujos',
+            'is_active' => true,
+        ]);
+        $legacyPermissions = collect([
+            ['name' => 'Decidir requisiciones', 'code' => 'purchases.requisitions.decide', 'module' => 'compras'],
+            ['name' => 'Crear órdenes', 'code' => 'purchases.orders.create', 'module' => 'compras'],
+        ])->map(fn (array $attributes) => Permission::create($attributes));
+        $legacyPermissions = $legacyPermissions->merge(Permission::query()
+            ->where('code', 'inventory.issues.create')
+            ->get());
+        $role->permissions()->attach($legacyPermissions->pluck('id'));
+
+        $migration = require database_path('migrations/2026_10_22_150000_split_requisition_and_quote_permissions.php');
+        $migration->up();
+        $removeLegacyPermission = require database_path('migrations/2026_10_22_150100_remove_generic_order_creation_permission.php');
+        $removeLegacyPermission->up();
+
+        $permissions = $role->fresh()->permissions()->pluck('code');
+        $this->assertTrue($permissions->contains('purchases.requisitions.approve'));
+        $this->assertTrue($permissions->contains('purchases.requisitions.reject'));
+        $this->assertTrue($permissions->contains('inventory.requisitions.dispatch'));
+        $this->assertTrue($permissions->contains('purchases.quotes.view'));
+        $this->assertTrue($permissions->contains('purchases.quotes.manage'));
+        $this->assertTrue($permissions->contains('purchases.quotes.award'));
+        $this->assertTrue($permissions->contains('purchases.quotes.generate_orders'));
+        $this->assertFalse($permissions->contains('purchases.orders.create'));
+        $this->assertFalse(Permission::query()->where('code', 'purchases.orders.create')->exists());
+        $this->assertFalse(Permission::query()->where('code', 'purchases.requisitions.decide')->exists());
     }
 }

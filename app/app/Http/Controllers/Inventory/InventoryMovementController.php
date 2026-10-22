@@ -481,9 +481,13 @@ class InventoryMovementController extends Controller
 
     public function createIssue(Request $request): View
     {
+        abort_unless($request->user()->hasPermission('inventory.requisitions.dispatch'), 403);
         $requisition = $this->accessibleRequisition((int) $request->query('requisition_id'), $request)
             ->load(['items.product', 'items.inventoryIssueItems', 'warehouse.branch']);
-        abort_unless($requisition->status === Requisition::STATUS_APPROVED, 403);
+        abort_unless(
+            in_array($requisition->status, [Requisition::STATUS_ACTIVE, Requisition::STATUS_APPROVED], true),
+            403,
+        );
 
         $items = $requisition->items->map(function (RequisitionItem $item) use ($requisition) {
             $issuedMilli = $item->inventoryIssueItems->sum(fn (InventoryIssueItem $issueItem) => $this->quantityMilli($issueItem->quantity));
@@ -513,11 +517,12 @@ class InventoryMovementController extends Controller
         $issue = DB::transaction(function () use ($validated, $request, $companyId, $user) {
             $requisition = Requisition::query()
                 ->whereKey($validated['requisition_id'])
-                ->where('status', Requisition::STATUS_APPROVED)
+                ->whereIn('status', [Requisition::STATUS_ACTIVE, Requisition::STATUS_APPROVED])
                 ->whereHas('department', fn (Builder $departments) => $departments->where('company_id', $companyId))
                 ->with('items.product')
                 ->lockForUpdate()
                 ->firstOrFail();
+            abort_unless($user->hasPermission('inventory.requisitions.dispatch'), 403);
             $warehouseId = $requisition->warehouse_id;
             abort_unless($warehouseId !== null && $user->canAccessWarehouse($warehouseId), 403);
             $requisitionItems = $requisition->items->keyBy('id');
@@ -536,7 +541,7 @@ class InventoryMovementController extends Controller
                 $quantityMilli = $this->quantityMilli($issueData['quantity']);
                 if ($quantityMilli > $remainingMilli) {
                     throw ValidationException::withMessages([
-                        'items' => __('La cantidad despachada no puede superar el saldo aprobado pendiente de la requisición.'),
+                        'items' => __('La cantidad despachada no puede superar el saldo pendiente de la requisición.'),
                     ]);
                 }
 

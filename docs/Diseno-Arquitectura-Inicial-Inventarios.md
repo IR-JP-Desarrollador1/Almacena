@@ -12,9 +12,10 @@ Este documento registra decisiones confirmadas y pendientes para orientar la imp
 - Módulos incluidos: autenticación y permisos, estructura y catálogos, compras, inventario, logística, reportes y cargue masivo de productos.
 - Sin integraciones externas en el alcance inicial.
 - Entradas ordinarias vinculadas a una orden de compra y salidas ordinarias a una requisición.
-- El jefe del área solicitante aprueba las requisiciones. Una requisición aprobada puede originar una única orden de compra inicial en borrador; crear y aprobar la orden son permisos separados y su aprobación es obligatoria antes de recibir.
-- La cotización se registra como referencia, fecha, proveedor y costos ingresados manualmente. El comparador de cotizaciones y la evaluación de proveedores siguen fuera del incremento actual.
-- La empresa configura una moneda base. La orden conserva moneda cotizada, tasa de cambio (unidades de moneda base por unidad cotizada), costos cotizados y costos convertidos. La tasa debe ser 1 si las monedas coinciden; la moneda base queda bloqueada al existir órdenes de compra.
+- El jefe del área solicitante aprueba las requisiciones. Una requisición aprobada puede originar varias órdenes de compra en borrador, por etapas; cada orden requiere aprobación antes de recibir.
+- Las cotizaciones se comparan por producto y requieren ofertas de al menos dos proveedores distintos. La selección es manual, permite adjudicar parcialmente por etapas y requiere justificación si no se elige el menor total con impuestos convertido a moneda base. Cada oferta registra precio neto, impuesto, moneda/tasa, marca y plazo; el costo trasladado a inventario permanece antes de impuestos.
+- La calificación manual de proveedores conserva el historial de notas de distancia, tiempo de entrega y cumplimiento, de 1 a 5, y muestra el promedio simple más reciente.
+- La empresa configura una moneda base. Las cotizaciones y órdenes conservan moneda cotizada, tasa de cambio (unidades de moneda base por unidad cotizada), costos cotizados y costos convertidos. La tasa debe ser 1 si las monedas coinciden; la moneda base queda bloqueada al existir cotizaciones u órdenes de compra.
 - Se registra costo cotizado y costo convertido por lote. La salida conserva el costo del lote físico despachado, incluso cuando FEFO selecciona uno distinto del más antiguo.
 - Se permiten recepciones y despachos parciales sin exceder las cantidades aprobadas. Cada producto configura si maneja vencimiento; si lo maneja, la recepción exige fecha y el despacho prioriza FEFO, con FIFO para desempatar. No se despachan lotes vencidos.
 - La recepción exige una orden de compra aprobada y la salida una requisición aprobada; no hay aprobación adicional para el movimiento derivado.
@@ -30,7 +31,7 @@ Separación funcional sugerida:
 1. **Acceso:** autenticación, recuperación, sesiones, usuarios, perfiles, permisos y auditoría administrativa.
 2. **Organización:** sedes, bodegas, ubicaciones y centros de costo.
 3. **Catálogos:** productos, unidades, categorías, proveedores y monedas.
-4. **Compras:** requisiciones, aprobaciones y órdenes; el comparador de cotizaciones y evaluaciones permanece pendiente.
+4. **Compras:** requisiciones, aprobaciones, comparación de cotizaciones, evaluaciones de proveedores y órdenes por etapas.
 5. **Inventario:** lotes, entradas parciales, salidas parciales y costos; kardex, conteos, ajustes y devoluciones permanecen pendientes.
 6. **Logística:** traslados, despacho, tránsito, entregas y comprobantes.
 7. **Consultas:** existencias actuales e históricas, kardex, costos, cumplimiento y exportaciones. El kardex inicial consulta movimientos por bodega/producto con saldo corrido y costo en moneda base.
@@ -128,7 +129,7 @@ Pruebas de diseño necesarias:
 
 ## 8. Decisiones que se refinan durante el desarrollo
 
-1. **Antes de ampliar compras:** definir comparación de cotizaciones, evaluación de proveedores y si se permitirán varias órdenes por requisición.
+1. **Antes de ampliar compras:** definir reversos de órdenes, devoluciones y reglas para cambios de moneda base; la comparación de cotizaciones, evaluación de proveedores y órdenes por etapas están aprobadas e implementadas.
 2. **Antes de ampliar inventario:** definir devoluciones, sobrantes/faltantes, daños, reversos, ajustes y saldos iniciales.
 3. **Antes de traslados y documentos:** definir permisos, aprobaciones, estados de tránsito, numeración y evidencias; el traslado deberá validar acceso a origen y destino.
 4. **Antes del importador de productos:** definir columnas, unicidad y si se cargarán proveedores y saldos iniciales.
