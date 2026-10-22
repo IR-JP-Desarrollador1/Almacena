@@ -1,0 +1,6 @@
+{
+    "requisition_status.draft": "Borrador",
+    "requisition_status.pending_approval": "Pendiente de aprobación",
+    "requisition_status.approved": "Aprobada",
+    "requisition_status.rejected": "Rechazada"
+}
