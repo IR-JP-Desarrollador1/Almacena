@@ -49,6 +49,7 @@ class RegionalSettingsTest extends TestCase
             'date_format' => 'd/m/Y',
             'time_format' => 'H:i',
         ])->assertRedirect(route('admin.regional-settings.edit'));
+        $this->assertSame('Configurações regionais salvas.', session('status'));
 
         $this->assertDatabaseHas('companies', [
             'id' => $company->id,

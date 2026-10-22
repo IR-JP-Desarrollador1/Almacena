@@ -21,6 +21,9 @@ use App\Models\Warehouse;
 use App\Models\WarehouseLot;
 use Database\Seeders\AccessControlSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Carbon;
+use PhpOffice\PhpSpreadsheet\Cell\DataType;
+use PhpOffice\PhpSpreadsheet\IOFactory;
 use Tests\TestCase;
 
 class InventoryMovementTest extends TestCase
@@ -446,6 +449,185 @@ class InventoryMovementTest extends TestCase
             ->assertForbidden();
     }
 
+    public function test_kardex_consolidates_accessible_warehouses_and_products_in_exports(): void
+    {
+        $firstOrder = $this->approvedPurchaseOrder('2.000', '15.0000');
+        $this->actingAs($this->warehouseOperator)
+            ->post(route('inventory.receipts.store'), [
+                'purchase_order_id' => $firstOrder->id,
+                'items' => [
+                    ['purchase_order_item_id' => $firstOrder->items()->firstOrFail()->id, 'quantity' => '2.000'],
+                ],
+            ])
+            ->assertRedirect();
+
+        $secondWarehouse = Warehouse::create([
+            'branch_id' => $this->warehouse->branch_id,
+            'code' => 'SECOND',
+            'name' => 'Bodega secundaria',
+        ]);
+        foreach ([$this->requester, $this->requisitionApprover, $this->orderCreator, $this->orderApprover, $this->warehouseOperator] as $user) {
+            $user->warehouses()->syncWithoutDetaching([$secondWarehouse->id]);
+        }
+        $secondProduct = Product::create([
+            'code' => 'PROD-02',
+            'name' => 'Segundo producto',
+            'unit_id' => $this->product->unit_id,
+        ]);
+        $secondOrder = $this->approvedPurchaseOrder('1.250', '20.0000', $secondWarehouse, $secondProduct);
+        $this->actingAs($this->warehouseOperator)
+            ->post(route('inventory.receipts.store'), [
+                'purchase_order_id' => $secondOrder->id,
+                'items' => [
+                    ['purchase_order_item_id' => $secondOrder->items()->firstOrFail()->id, 'quantity' => '1.250'],
+                ],
+            ])
+            ->assertRedirect();
+
+        $this->actingAs($this->warehouseOperator)
+            ->get(route('inventory.kardex'))
+            ->assertOk()
+            ->assertSee('Bodega principal')
+            ->assertSee('Bodega secundaria')
+            ->assertSee('PROD-01')
+            ->assertSee('PROD-02')
+            ->assertSee('2 movimientos en el informe');
+
+        $csv = $this->get(route('inventory.kardex.export', ['format' => 'csv']));
+        $csv->assertOk()->assertHeader('content-type', 'text/csv; charset=UTF-8');
+        $csvContent = $csv->streamedContent();
+        $this->assertStringStartsWith("\xEF\xBB\xBF", $csvContent);
+        $csvStream = fopen('php://temp', 'r+');
+        fwrite($csvStream, substr($csvContent, 3));
+        rewind($csvStream);
+        $csvHeadings = fgetcsv($csvStream);
+        $csvRows = [];
+        while (($row = fgetcsv($csvStream)) !== false) {
+            $csvRows[] = $row;
+        }
+        fclose($csvStream);
+        $this->assertCount(13, $csvHeadings);
+        $this->assertCount(2, $csvRows);
+        $this->assertContains('2,000', array_column($csvRows, 8));
+        $this->assertContains('1,250', array_column($csvRows, 8));
+        $this->assertContains('2,000', array_column($csvRows, 9));
+        $this->assertContains('1,250', array_column($csvRows, 9));
+
+        $xlsx = $this->get(route('inventory.kardex.export', ['format' => 'xlsx']));
+        $xlsx->assertOk()
+            ->assertHeader('content-type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+        $xlsxContent = $xlsx->streamedContent();
+        $this->assertSame('PK', substr($xlsxContent, 0, 2));
+        $temporaryFile = tempnam(sys_get_temp_dir(), 'kardex-');
+        try {
+            file_put_contents($temporaryFile, $xlsxContent);
+            $spreadsheet = IOFactory::load($temporaryFile);
+            $sheet = $spreadsheet->getActiveSheet();
+            $this->assertSame('M', $sheet->getHighestColumn());
+            $this->assertSame(3, $sheet->getHighestRow());
+            $this->assertSame(DataType::TYPE_NUMERIC, $sheet->getCell('I2')->getDataType());
+            $this->assertSame(DataType::TYPE_NUMERIC, $sheet->getCell('J2')->getDataType());
+            $exportedProducts = [$sheet->getCell('C2')->getValue(), $sheet->getCell('C3')->getValue()];
+            $this->assertEqualsCanonicalizing(['PROD-01', 'PROD-02'], $exportedProducts);
+            $spreadsheet->disconnectWorksheets();
+        } finally {
+            unlink($temporaryFile);
+        }
+
+        $pdf = $this->get(route('inventory.kardex.export', ['format' => 'pdf']));
+        $pdf->assertOk()->assertHeader('content-type', 'application/pdf');
+        $this->assertStringStartsWith('%PDF-', $pdf->getContent());
+    }
+
+    public function test_filtered_kardex_exports_keep_the_opening_balance_before_the_date_range(): void
+    {
+        $order = $this->approvedPurchaseOrder('2.000', '15.0000');
+        $this->actingAs($this->warehouseOperator)
+            ->post(route('inventory.receipts.store'), [
+                'purchase_order_id' => $order->id,
+                'items' => [
+                    ['purchase_order_item_id' => $order->items()->firstOrFail()->id, 'quantity' => '2.000'],
+                ],
+            ])
+            ->assertRedirect();
+
+        $requisition = $this->approvedRequisition('0.750');
+        $this->actingAs($this->warehouseOperator)
+            ->post(route('inventory.issues.store'), [
+                'requisition_id' => $requisition->id,
+                'items' => [
+                    ['requisition_item_id' => $requisition->items()->firstOrFail()->id, 'quantity' => '0.750'],
+                ],
+            ])
+            ->assertRedirect();
+
+        StockMovement::query()
+            ->where('warehouse_id', $this->warehouse->id)
+            ->where('product_id', $this->product->id)
+            ->where('movement_type', StockMovement::TYPE_RECEIPT)
+            ->update(['occurred_at' => Carbon::today()->subDays(2)->setTime(9, 0)]);
+        StockMovement::query()
+            ->where('warehouse_id', $this->warehouse->id)
+            ->where('product_id', $this->product->id)
+            ->where('movement_type', StockMovement::TYPE_ISSUE)
+            ->update(['occurred_at' => Carbon::today()->subDay()->setTime(10, 0)]);
+
+        $filters = [
+            'warehouse_id' => $this->warehouse->id,
+            'product_id' => $this->product->id,
+            'from_date' => today()->subDay()->toDateString(),
+            'to_date' => today()->subDay()->toDateString(),
+        ];
+
+        $filteredPage = $this->actingAs($this->warehouseOperator)
+            ->get(route('inventory.kardex', $filters));
+        $filteredPage
+            ->assertOk()
+            ->assertSee('-0,750')
+            ->assertSee('1,250')
+            ->assertDontSee('+2,000')
+            ->assertSee(route('inventory.kardex.export', [...$filters, 'format' => 'xlsx']))
+            ->assertSee(route('inventory.kardex.export', [...$filters, 'format' => 'csv']))
+            ->assertSee(route('inventory.kardex.export', [...$filters, 'format' => 'pdf']));
+
+        $csv = $this->get(route('inventory.kardex.export', [...$filters, 'format' => 'csv']));
+        $csv->assertOk()->assertHeader('content-type', 'text/csv; charset=UTF-8');
+        $csvStream = fopen('php://temp', 'r+');
+        fwrite($csvStream, substr($csv->streamedContent(), 3));
+        rewind($csvStream);
+        fgetcsv($csvStream);
+        $csvRows = [];
+        while (($row = fgetcsv($csvStream)) !== false) {
+            $csvRows[] = $row;
+        }
+        fclose($csvStream);
+        $this->assertCount(1, $csvRows);
+        $this->assertSame('PROD-01', $csvRows[0][2]);
+        $this->assertSame('-0,750', $csvRows[0][8]);
+        $this->assertSame('1,250', $csvRows[0][9]);
+
+        $xlsx = $this->get(route('inventory.kardex.export', [...$filters, 'format' => 'xlsx']));
+        $xlsx->assertOk()
+            ->assertHeader('content-type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+        $temporaryFile = tempnam(sys_get_temp_dir(), 'kardex-filtered-');
+        try {
+            file_put_contents($temporaryFile, $xlsx->streamedContent());
+            $spreadsheet = IOFactory::load($temporaryFile);
+            $sheet = $spreadsheet->getActiveSheet();
+            $this->assertSame(2, $sheet->getHighestRow());
+            $this->assertSame('PROD-01', $sheet->getCell('C2')->getValue());
+            $this->assertSame(-0.75, $sheet->getCell('I2')->getValue());
+            $this->assertSame(1.25, $sheet->getCell('J2')->getValue());
+            $spreadsheet->disconnectWorksheets();
+        } finally {
+            unlink($temporaryFile);
+        }
+
+        $pdf = $this->get(route('inventory.kardex.export', [...$filters, 'format' => 'pdf']));
+        $pdf->assertOk()->assertHeader('content-type', 'application/pdf');
+        $this->assertStringStartsWith('%PDF-', $pdf->getContent());
+    }
+
     private function userWithRole(string $roleSlug, bool $withWarehouse): User
     {
         $user = User::factory()->create();
@@ -457,15 +639,18 @@ class InventoryMovementTest extends TestCase
         return $user;
     }
 
-    private function approvedRequisition(string $quantity): Requisition
-    {
+    private function approvedRequisition(
+        string $quantity,
+        ?Warehouse $warehouse = null,
+        ?Product $product = null,
+    ): Requisition {
         $this->actingAs($this->requester)
             ->post(route('purchasing.requisitions.store'), [
-                'warehouse_id' => $this->warehouse->id,
+                'warehouse_id' => ($warehouse ?? $this->warehouse)->id,
                 'justification' => 'Reposición para operación.',
                 'needed_by' => today()->addDays(5)->toDateString(),
                 'items' => [
-                    ['product_id' => $this->product->id, 'quantity' => $quantity],
+                    ['product_id' => ($product ?? $this->product)->id, 'quantity' => $quantity],
                 ],
             ])->assertRedirect();
         $requisition = Requisition::query()->latest('id')->firstOrFail();
@@ -494,9 +679,13 @@ class InventoryMovementTest extends TestCase
         return PurchaseOrder::query()->where('requisition_id', $requisition->id)->firstOrFail();
     }
 
-    private function approvedPurchaseOrder(string $quantity, string $unitCost): PurchaseOrder
-    {
-        $requisition = $this->approvedRequisition($quantity);
+    private function approvedPurchaseOrder(
+        string $quantity,
+        string $unitCost,
+        ?Warehouse $warehouse = null,
+        ?Product $product = null,
+    ): PurchaseOrder {
+        $requisition = $this->approvedRequisition($quantity, $warehouse, $product);
         $order = $this->createPurchaseOrder($requisition, $unitCost);
         $this->actingAs($this->orderApprover)
             ->post(route('purchasing.orders.approve', $order))

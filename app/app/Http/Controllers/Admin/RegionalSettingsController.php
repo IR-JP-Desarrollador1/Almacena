@@ -7,6 +7,7 @@ use App\Models\AuditLog;
 use App\Models\Company;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\App;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\Rule;
 use Illuminate\View\View;
@@ -57,6 +58,8 @@ class RegionalSettingsController extends Controller
                 'ip_address' => $request->ip(),
             ]);
         });
+
+        App::setLocale($validated['language']);
 
         return redirect()->route('admin.regional-settings.edit')->with('status', __('Configuración regional guardada.'));
     }
