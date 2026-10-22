@@ -109,7 +109,8 @@ class InventoryMovementTest extends TestCase
         $this->actingAs($this->orderCreator)
             ->get(route('purchasing.orders.create', ['requisition_id' => $requisition->id]))
             ->assertOk()
-            ->assertSee($this->product->name);
+            ->assertSee($this->product->name)
+            ->assertSee('Formato regional: 17/08/2026');
         $order = $this->createPurchaseOrder($requisition, '1250.2500');
 
         $this->assertSame(PurchaseOrder::STATUS_DRAFT, $order->status);
@@ -417,7 +418,8 @@ class InventoryMovementTest extends TestCase
             ->assertSee('SAL-')
             ->assertSee('+2,000')
             ->assertSee('-0,750')
-            ->assertSee('1,250');
+            ->assertSee('1,250')
+            ->assertSee('Formato regional: 17/08/2026');
 
         $this->get(route('inventory.kardex'))
             ->assertOk()
