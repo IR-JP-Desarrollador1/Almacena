@@ -26,7 +26,7 @@ return [
         'GD' => ['name' => 'Granada', 'language' => 'en', 'decimal' => '.', 'thousands' => ',', 'date' => 'd/m/Y', 'time' => 'h:i A'],
         'GT' => ['name' => 'Guatemala', 'language' => 'es', 'decimal' => ',', 'thousands' => '.', 'date' => 'd/m/Y', 'time' => 'h:i A'],
         'GY' => ['name' => 'Guyana', 'language' => 'en', 'decimal' => '.', 'thousands' => ',', 'date' => 'd/m/Y', 'time' => 'h:i A'],
-        'HT' => ['name' => 'Haití', 'language' => 'fr', 'decimal' => ',', 'thousands' => ' ', 'date' => 'd/m/Y', 'time' => 'H:i'],
+        'HT' => ['name' => 'Haití', 'language' => 'fr', 'decimal' => ',', 'thousands' => "\u{00A0}", 'date' => 'd/m/Y', 'time' => 'H:i'],
         'HN' => ['name' => 'Honduras', 'language' => 'es', 'decimal' => ',', 'thousands' => '.', 'date' => 'd/m/Y', 'time' => 'h:i A'],
         'JM' => ['name' => 'Jamaica', 'language' => 'en', 'decimal' => '.', 'thousands' => ',', 'date' => 'd/m/Y', 'time' => 'h:i A'],
         'MX' => ['name' => 'México', 'language' => 'es', 'decimal' => '.', 'thousands' => ',', 'date' => 'd/m/Y', 'time' => 'h:i A'],
@@ -44,7 +44,7 @@ return [
         'US' => ['name' => 'Estados Unidos', 'language' => 'en', 'decimal' => '.', 'thousands' => ',', 'date' => 'm/d/Y', 'time' => 'h:i A'],
     ],
     'decimal_separators' => [',' => 'Coma (,)', '.' => 'Punto (.)'],
-    'thousands_separators' => ['.' => 'Punto (.)', ',' => 'Coma (,)', ' ' => 'Espacio'],
+    'thousands_separators' => ['.' => 'Punto (.)', ',' => 'Coma (,)', "\u{00A0}" => 'Espacio'],
     'date_formats' => [
         'd/m/Y' => 'DD/MM/AAAA',
         'm/d/Y' => 'MM/DD/AAAA',

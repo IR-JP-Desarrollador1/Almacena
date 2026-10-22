@@ -31,7 +31,7 @@
                             <p class="mt-1 text-xs text-red-700">{{ __('No tienes bodegas activas asignadas. Solicita acceso al administrador antes de crear una requisición.') }}</p>
                         @endif
                     </div>
-                    <div><x-input-label for="needed_by" :value="__('Fecha requerida (opcional)')" /><x-text-input id="needed_by" name="needed_by" type="date" class="mt-1 block w-full" :value="old('needed_by', $requisition->needed_by?->format('Y-m-d'))" /><x-input-error :messages="$errors->get('needed_by')" class="mt-2" /></div>
+                    <div><x-input-label for="needed_by" :value="__('Fecha requerida (opcional)')" /><x-text-input id="needed_by" name="needed_by" type="date" class="mt-1 block w-full" :value="old('needed_by', $requisition->needed_by?->format('Y-m-d'))" /><p class="mt-1 text-xs text-gray-500">{{ __('Formato regional: :date', ['date' => $regional->date('2026-08-17')]) }}</p><x-input-error :messages="$errors->get('needed_by')" class="mt-2" /></div>
                     <div class="md:col-span-2"><x-input-label for="justification" :value="__('Justificación de la solicitud')" /><textarea id="justification" name="justification" rows="3" required class="mt-1 block w-full rounded-md border-gray-300 shadow-sm">{{ old('justification', $requisition->justification) }}</textarea><x-input-error :messages="$errors->get('justification')" class="mt-2" /></div>
                 </div>
 

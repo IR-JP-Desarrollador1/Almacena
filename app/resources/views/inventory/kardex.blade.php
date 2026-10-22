@@ -32,11 +32,13 @@
                 <div>
                     <label for="from_date" class="block text-sm font-medium text-gray-700">{{ __('Desde') }}</label>
                     <input id="from_date" name="from_date" type="date" value="{{ $filters['from_date'] ?? '' }}" max="{{ today()->toDateString() }}" class="mt-1 block w-full rounded-md border-gray-300 shadow-sm">
+                    <p class="mt-1 text-xs text-gray-500">{{ __('Formato regional: :date', ['date' => $regional->date('2026-08-17')]) }}</p>
                     <x-input-error :messages="$errors->get('from_date')" class="mt-1" />
                 </div>
                 <div>
                     <label for="to_date" class="block text-sm font-medium text-gray-700">{{ __('Hasta') }}</label>
                     <input id="to_date" name="to_date" type="date" value="{{ $filters['to_date'] ?? '' }}" max="{{ today()->toDateString() }}" class="mt-1 block w-full rounded-md border-gray-300 shadow-sm">
+                    <p class="mt-1 text-xs text-gray-500">{{ __('Formato regional: :date', ['date' => $regional->date('2026-08-17')]) }}</p>
                     <x-input-error :messages="$errors->get('to_date')" class="mt-1" />
                 </div>
                 <div class="flex flex-wrap items-center gap-3 md:col-span-2 lg:col-span-4">

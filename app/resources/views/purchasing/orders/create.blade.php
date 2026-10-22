@@ -32,6 +32,7 @@
                 <div>
                     <label for="quote_date" class="block text-sm font-medium text-gray-700">{{ __('Fecha de cotización') }}</label>
                     <input id="quote_date" name="quote_date" type="date" value="{{ old('quote_date', today()->toDateString()) }}" required max="{{ today()->toDateString() }}" class="mt-1 block w-full rounded-md border-gray-300 shadow-sm">
+                    <p class="mt-1 text-xs text-gray-500">{{ __('Formato regional: :date', ['date' => $regional->date('2026-08-17')]) }}</p>
                     @error('quote_date')<p class="mt-1 text-sm text-red-700">{{ $message }}</p>@enderror
                 </div>
                 <div>
