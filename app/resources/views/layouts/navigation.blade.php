@@ -11,11 +11,16 @@
         || $user->hasPermission('purchases.quotes.award')
         || $user->hasPermission('purchases.quotes.generate_orders')
         || $user->hasPermission('purchases.orders.view')
-        || $user->hasPermission('purchases.orders.approve');
+        || $user->hasPermission('purchases.orders.submit')
+        || $user->hasPermission('purchases.orders.approve')
+        || $user->hasPermission('purchases.orders.approve_any')
+        || $user->hasPermission('purchases.orders.reject');
     $canInventory = $user->hasPermission('inventory.receipts.view')
         || $user->hasPermission('inventory.receipts.create')
+        || $user->hasPermission('inventory.receipts.direct.create')
         || $user->hasPermission('inventory.issues.view')
         || $user->hasPermission('inventory.issues.create')
+        || $user->hasPermission('inventory.issues.direct.create')
         || $user->hasPermission('inventory.requisitions.dispatch')
         || $user->hasPermission('inventory.movements.view')
         || $user->hasPermission('inventory.requisitions.view')
@@ -67,7 +72,7 @@
                             <span>{{ __('Cotizaciones') }}</span>
                         </a>
                     @endif
-                    @if ($user->hasPermission('purchases.orders.view') || $user->hasPermission('purchases.quotes.generate_orders') || $user->hasPermission('purchases.orders.approve'))
+                    @if ($user->hasPermission('purchases.orders.view') || $user->hasPermission('purchases.quotes.generate_orders') || $user->hasPermission('purchases.orders.submit') || $user->hasPermission('purchases.orders.approve') || $user->hasPermission('purchases.orders.approve_any') || $user->hasPermission('purchases.orders.reject'))
                         <a class="nav-link {{ request()->routeIs('purchasing.orders.*') ? 'nav-link-active' : '' }}" href="{{ route('purchasing.orders.index') }}">
                             <x-nav-icon name="receipt" />
                             <span>{{ __('Órdenes de compra') }}</span>
@@ -94,12 +99,12 @@
                             <x-nav-icon name="receipt" /><span>{{ __('Kardex') }}</span>
                         </a>
                     @endif
-                    @if ($user->hasPermission('inventory.receipts.view') || $user->hasPermission('inventory.receipts.create'))
+                    @if ($user->hasPermission('inventory.receipts.view') || $user->hasPermission('inventory.receipts.create') || $user->hasPermission('inventory.receipts.direct.create'))
                         <a class="nav-link {{ request()->routeIs('inventory.receipts.*') ? 'nav-link-active' : '' }}" href="{{ route('inventory.receipts.index') }}">
                             <x-nav-icon name="receipt" /><span>{{ __('Entradas') }}</span>
                         </a>
                     @endif
-                    @if ($user->hasPermission('inventory.issues.view') || $user->hasPermission('inventory.issues.create'))
+                    @if ($user->hasPermission('inventory.issues.view') || $user->hasPermission('inventory.issues.create') || $user->hasPermission('inventory.issues.direct.create'))
                         <a class="nav-link {{ request()->routeIs('inventory.issues.*') ? 'nav-link-active' : '' }}" href="{{ route('inventory.issues.index') }}">
                             <x-nav-icon name="issue" /><span>{{ __('Salidas') }}</span>
                         </a>

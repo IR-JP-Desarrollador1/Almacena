@@ -121,7 +121,28 @@ class InventoryMovementTest extends TestCase
             ->get(route('purchasing.orders.show', $order))
             ->assertOk()
             ->assertSee('Marca de prueba')
-            ->assertSee('Impuesto (%)');
+            ->assertSee('Impuesto (%)')
+            ->assertSee('Enviar orden a aprobación');
+        $this->actingAs($this->warehouseOperator)
+            ->get(route('inventory.receipts.create', ['purchase_order_id' => $order->id]))
+            ->assertForbidden();
+        $this->actingAs($this->orderCreator)
+            ->post(route('purchasing.orders.approve', $order))
+            ->assertStatus(409);
+        $this->actingAs($this->orderCreator)
+            ->post(route('purchasing.orders.submit', $order))
+            ->assertRedirect(route('purchasing.orders.show', $order));
+        $this->assertSame(PurchaseOrder::STATUS_PENDING_APPROVAL, $order->fresh()->status);
+        $this->actingAs($this->orderApprover)
+            ->get(route('purchasing.orders.index', ['status' => PurchaseOrder::STATUS_PENDING_APPROVAL]))
+            ->assertOk()
+            ->assertSee($order->reference)
+            ->assertSee('Pendientes de aprobación (1)');
+        $this->actingAs($this->orderApprover)
+            ->get(route('purchasing.orders.show', $order))
+            ->assertOk()
+            ->assertSee('Aprobar orden')
+            ->assertSee('Rechazar orden');
         $this->actingAs($this->warehouseOperator)
             ->get(route('inventory.receipts.create', ['purchase_order_id' => $order->id]))
             ->assertForbidden();
@@ -132,6 +153,11 @@ class InventoryMovementTest extends TestCase
             ->post(route('purchasing.orders.approve', $order))
             ->assertRedirect(route('purchasing.orders.show', $order));
         $this->assertSame(PurchaseOrder::STATUS_APPROVED, $order->fresh()->status);
+        $this->actingAs($this->warehouseOperator)
+            ->get(route('inventory.receipts.create'))
+            ->assertOk()
+            ->assertSee('Entradas desde órdenes aprobadas')
+            ->assertSee($order->reference);
         $this->actingAs($this->warehouseOperator)
             ->get(route('inventory.receipts.create', ['purchase_order_id' => $order->id]))
             ->assertOk()
@@ -148,7 +174,6 @@ class InventoryMovementTest extends TestCase
         $this->actingAs($this->warehouseOperator)
             ->post(route('inventory.receipts.store'), $receiptData)
             ->assertRedirect(route('inventory.receipts.index'));
-
         $this->assertDatabaseHas('receipts', [
             'purchase_order_id' => $order->id,
             'warehouse_id' => $this->warehouse->id,
@@ -173,6 +198,509 @@ class InventoryMovementTest extends TestCase
         $this->actingAs($unassignedOperator)
             ->get(route('purchasing.orders.show', $order))
             ->assertForbidden();
+    }
+
+    public function test_standalone_direct_purchase_order_requires_approval_before_receiving(): void
+    {
+        $cop = Currency::query()->where('code', 'COP')->firstOrFail();
+        $this->actingAs($this->warehouseOperator)
+            ->get(route('purchasing.orders.direct.create'))
+            ->assertForbidden();
+        $this->actingAs($this->orderCreator)
+            ->get(route('purchasing.orders.direct.create'))
+            ->assertOk()
+            ->assertSee('Desde requisición sin cotización')
+            ->assertSee('Sin requisición ni cotización');
+
+        $this->actingAs($this->orderCreator)
+            ->post(route('purchasing.orders.direct.store'), [
+                'mode' => 'standalone',
+                'warehouse_id' => $this->warehouse->id,
+                'supplier_id' => $this->supplier->id,
+                'quote_currency_id' => $cop->id,
+                'exchange_rate' => '1.00000000',
+                'items' => [
+                    [
+                        'product_id' => $this->product->id,
+                        'quantity' => '2.000',
+                        'unit_cost' => '125.2500',
+                        'tax_rate' => '19.0000',
+                        'brand' => 'Marca directa',
+                        'delivery_days' => '5',
+                    ],
+                ],
+            ])
+            ->assertSessionHasNoErrors()
+            ->assertRedirect();
+
+        $order = PurchaseOrder::query()->latest('id')->firstOrFail();
+        $this->assertDatabaseHas('purchase_orders', [
+            'id' => $order->id,
+            'requisition_id' => null,
+            'warehouse_id' => $this->warehouse->id,
+            'supplier_quote_id' => null,
+            'quote_reference' => null,
+            'quote_date' => null,
+            'status' => PurchaseOrder::STATUS_DRAFT,
+        ]);
+        $this->assertDatabaseHas('purchase_order_items', [
+            'purchase_order_id' => $order->id,
+            'requisition_item_id' => null,
+            'product_id' => $this->product->id,
+        ]);
+
+        $this->actingAs($this->warehouseOperator)
+            ->get(route('inventory.receipts.create', ['purchase_order_id' => $order->id]))
+            ->assertForbidden();
+        $this->actingAs($this->orderCreator)
+            ->post(route('purchasing.orders.submit', $order))
+            ->assertRedirect(route('purchasing.orders.show', $order));
+        $this->actingAs($this->orderApprover)
+            ->post(route('purchasing.orders.approve', $order))
+            ->assertRedirect(route('purchasing.orders.show', $order));
+        $this->assertSame(PurchaseOrder::STATUS_APPROVED, $order->fresh()->status);
+        $this->actingAs($this->warehouseOperator)
+            ->get(route('inventory.receipts.create', ['purchase_order_id' => $order->id]))
+            ->assertOk()
+            ->assertSee($order->reference)
+            ->assertSee($this->warehouse->name);
+        $orderItem = $order->items()->firstOrFail();
+        $this->actingAs($this->warehouseOperator)
+            ->post(route('inventory.receipts.store'), [
+                'purchase_order_id' => $order->id,
+                'items' => [
+                    ['purchase_order_item_id' => $orderItem->id, 'quantity' => '2.000'],
+                ],
+            ])
+            ->assertRedirect(route('inventory.receipts.index'));
+        $this->assertDatabaseHas('receipts', [
+            'purchase_order_id' => $order->id,
+            'warehouse_id' => $this->warehouse->id,
+        ]);
+        $this->assertDatabaseHas('stock_movements', [
+            'reference_type' => 'receipt',
+            'quantity' => '2.000',
+            'warehouse_id' => $this->warehouse->id,
+        ]);
+    }
+
+    public function test_direct_purchase_order_from_an_approved_requisition_skips_quotes(): void
+    {
+        $requisition = $this->approvedRequisition('5.000');
+        $item = $requisition->items()->firstOrFail();
+        $cop = Currency::query()->where('code', 'COP')->firstOrFail();
+
+        $this->actingAs($this->orderCreator)
+            ->get(route('purchasing.orders.direct.create', ['mode' => 'requisition']))
+            ->assertOk()
+            ->assertSee($requisition->reference);
+
+        $this->actingAs($this->orderCreator)
+            ->get(route('purchasing.orders.direct.create', [
+                'mode' => 'requisition',
+                'requisition_id' => $requisition->id,
+            ]))
+            ->assertOk()
+            ->assertSee('value="'.$item->id.'" selected', false)
+            ->assertSee('value="5.000"', false);
+
+        $this->actingAs($this->orderCreator)
+            ->post(route('purchasing.orders.direct.store'), [
+                'mode' => 'requisition',
+                'requisition_id' => $requisition->id,
+                'supplier_id' => $this->supplier->id,
+                'quote_currency_id' => $cop->id,
+                'exchange_rate' => '1.00000000',
+                'items' => [
+                    [
+                        'requisition_item_id' => $item->id,
+                        'quantity' => '4.000',
+                        'unit_cost' => '125.2500',
+                        'tax_rate' => '0',
+                    ],
+                ],
+            ])
+            ->assertSessionHasErrors('items.0.quantity');
+
+        $this->actingAs($this->orderCreator)
+            ->post(route('purchasing.orders.direct.store'), [
+                'mode' => 'requisition',
+                'requisition_id' => $requisition->id,
+                'supplier_id' => $this->supplier->id,
+                'quote_currency_id' => $cop->id,
+                'exchange_rate' => '1.00000000',
+                'items' => [
+                    [
+                        'requisition_item_id' => $item->id,
+                        'quantity' => '5.000',
+                        'unit_cost' => '125.2500',
+                        'tax_rate' => '0',
+                    ],
+                ],
+            ])
+            ->assertSessionHasNoErrors()
+            ->assertRedirect();
+
+        $order = PurchaseOrder::query()->latest('id')->firstOrFail();
+        $this->assertDatabaseHas('purchase_orders', [
+            'id' => $order->id,
+            'requisition_id' => $requisition->id,
+            'warehouse_id' => $requisition->warehouse_id,
+            'supplier_quote_id' => null,
+            'status' => PurchaseOrder::STATUS_DRAFT,
+        ]);
+        $this->assertDatabaseHas('purchase_order_items', [
+            'purchase_order_id' => $order->id,
+            'requisition_item_id' => $item->id,
+            'quantity' => '5.000',
+            'supplier_quote_item_id' => null,
+        ]);
+        $this->actingAs($this->orderCreator)
+            ->get(route('purchasing.orders.show', $order))
+            ->assertOk()
+            ->assertSee('Sin cotización')
+            ->assertSee('Enviar orden a aprobación');
+    }
+
+    public function test_administration_can_super_approve_its_own_purchase_order(): void
+    {
+        $requisition = $this->approvedRequisition('3.000');
+        $order = $this->createPurchaseOrder($requisition, '1250.2500');
+        $order->update(['created_by_user_id' => $this->administrator->id]);
+
+        $this->actingAs($this->administrator)
+            ->post(route('purchasing.orders.submit', $order))
+            ->assertRedirect(route('purchasing.orders.show', $order));
+        $this->actingAs($this->administrator)
+            ->post(route('purchasing.orders.approve', $order))
+            ->assertRedirect(route('purchasing.orders.show', $order));
+
+        $this->assertSame(PurchaseOrder::STATUS_APPROVED, $order->fresh()->status);
+        $this->assertSame($this->administrator->id, $order->fresh()->approved_by_user_id);
+    }
+
+    public function test_rejected_purchase_order_can_be_corrected_and_resubmitted_with_audit_history(): void
+    {
+        $requisition = $this->approvedRequisition('5.000');
+        $order = $this->createPurchaseOrder($requisition, '1250.2500');
+
+        $this->actingAs($this->orderCreator)
+            ->post(route('purchasing.orders.submit', $order))
+            ->assertRedirect();
+        $this->actingAs($this->orderApprover)
+            ->post(route('purchasing.orders.reject', $order))
+            ->assertSessionHasErrors('rejection_reason');
+        $this->assertSame(PurchaseOrder::STATUS_PENDING_APPROVAL, $order->fresh()->status);
+        $this->actingAs($this->orderApprover)
+            ->post(route('purchasing.orders.reject', $order), [
+                'rejection_reason' => 'Solicitar ajuste de precio y plazo.',
+            ])
+            ->assertRedirect(route('purchasing.orders.show', $order));
+
+        $order->refresh();
+        $this->assertSame(PurchaseOrder::STATUS_REJECTED, $order->status);
+        $this->assertSame($this->orderApprover->id, $order->rejected_by_user_id);
+        $this->assertSame('Solicitar ajuste de precio y plazo.', $order->rejection_reason);
+        $this->assertDatabaseHas('audit_logs', [
+            'action' => 'rejected',
+            'entity_type' => 'purchase_order',
+            'entity_id' => $order->id,
+        ]);
+        $this->actingAs($this->orderCreator)
+            ->get(route('purchasing.orders.edit', $order))
+            ->assertOk()
+            ->assertSee('Solicitar ajuste de precio y plazo.');
+        $this->actingAs($this->orderApprover)
+            ->get(route('purchasing.orders.edit', $order))
+            ->assertForbidden();
+        $this->actingAs($this->orderCreator)
+            ->post(route('purchasing.orders.submit', $order))
+            ->assertStatus(409);
+
+        $orderItem = $order->items()->firstOrFail();
+        $newSupplier = Supplier::create(['legal_name' => 'Proveedor corregido']);
+        $usd = Currency::query()->where('code', 'USD')->firstOrFail();
+        $this->actingAs($this->orderCreator)
+            ->put(route('purchasing.orders.update', $order), [
+                'supplier_id' => $newSupplier->id,
+                'quote_currency_id' => $usd->id,
+                'exchange_rate' => '4000.00000000',
+                'quote_reference' => 'COT-CORREGIDA',
+                'quote_date' => today()->toDateString(),
+                'items' => [
+                    $orderItem->id => [
+                        'quantity' => '6.000',
+                        'unit_cost' => '1300.0000',
+                        'tax_rate' => '5.0000',
+                        'brand' => 'Marca corregida',
+                        'delivery_days' => 8,
+                    ],
+                ],
+            ])
+            ->assertSessionHasErrors("items.{$orderItem->id}.quantity");
+        $this->assertSame(PurchaseOrder::STATUS_REJECTED, $order->fresh()->status);
+
+        $this->actingAs($this->orderCreator)
+            ->put(route('purchasing.orders.update', $order), [
+                'supplier_id' => $newSupplier->id,
+                'quote_currency_id' => $usd->id,
+                'exchange_rate' => '4000.00000000',
+                'quote_reference' => 'COT-CORREGIDA',
+                'quote_date' => today()->toDateString(),
+                'items' => [
+                    $orderItem->id => [
+                        'quantity' => '4.000',
+                        'unit_cost' => '1300.0000',
+                        'tax_rate' => '5.0000',
+                        'brand' => 'Marca corregida',
+                        'delivery_days' => 8,
+                    ],
+                ],
+            ])
+            ->assertRedirect(route('purchasing.orders.show', $order));
+
+        $order->refresh();
+        $orderItem->refresh();
+        $this->assertSame(PurchaseOrder::STATUS_DRAFT, $order->status);
+        $this->assertSame($newSupplier->id, $order->supplier_id);
+        $this->assertSame($usd->id, $order->quote_currency_id);
+        $this->assertSame($this->company->base_currency_id, $order->base_currency_id);
+        $this->assertSame('4000.00000000', $order->exchange_rate);
+        $this->assertSame('COT-CORREGIDA', $order->quote_reference);
+        $this->assertEquals(4, $orderItem->quantity);
+        $this->assertEquals(1300, $orderItem->unit_cost);
+        $this->assertEquals(5200000, $orderItem->unit_cost_base);
+        $this->assertEquals(5, $orderItem->tax_rate);
+        $this->assertSame('Marca corregida', $orderItem->brand);
+        $this->assertSame(8, $orderItem->delivery_days);
+        $this->assertDatabaseHas('audit_logs', [
+            'action' => 'updated_after_rejection',
+            'entity_type' => 'purchase_order',
+            'entity_id' => $order->id,
+        ]);
+
+        $this->actingAs($this->orderCreator)
+            ->post(route('purchasing.orders.submit', $order))
+            ->assertRedirect();
+        $this->assertSame(PurchaseOrder::STATUS_PENDING_APPROVAL, $order->fresh()->status);
+        $this->actingAs($this->orderApprover)
+            ->post(route('purchasing.orders.approve', $order))
+            ->assertRedirect();
+        $this->assertSame(PurchaseOrder::STATUS_APPROVED, $order->fresh()->status);
+    }
+
+    public function test_direct_receipt_creates_audited_stock_at_the_company_base_cost(): void
+    {
+        $this->actingAs($this->warehouseOperator)
+            ->get(route('inventory.receipts.create', ['mode' => 'direct']))
+            ->assertOk()
+            ->assertSee('Crear entrada directa')
+            ->assertSee($this->product->code)
+            ->assertSee('Costo unitario (COP)');
+
+        $this->post(route('inventory.receipts.store'), [
+            'source_type' => 'direct',
+            'warehouse_id' => $this->warehouse->id,
+            'direct_reason' => 'donation',
+            'document_reference' => 'DON-001',
+            'items' => [
+                [
+                    'product_id' => $this->product->id,
+                    'quantity' => '2.500',
+                    'unit_cost' => '1234.5678',
+                ],
+            ],
+        ])->assertRedirect();
+
+        $receipt = Receipt::query()->firstOrFail();
+        $this->assertSame('direct', $receipt->source_type);
+        $this->assertSame('donation', $receipt->direct_reason);
+        $this->assertNull($receipt->purchase_order_id);
+        $this->assertSame($this->warehouse->id, $receipt->warehouse_id);
+        $receiptItem = $receipt->items()->with('lot')->firstOrFail();
+        $this->assertNull($receiptItem->purchase_order_item_id);
+        $this->assertEquals(1234.5678, $receiptItem->unit_cost);
+        $this->assertEquals(1234.5678, $receiptItem->unit_cost_base);
+        $this->assertSame($this->company->base_currency_id, $receiptItem->lot->quote_currency_id);
+        $this->assertSame('1.00000000', $receiptItem->lot->exchange_rate);
+        $this->assertDatabaseHas('stock_movements', [
+            'warehouse_lot_id' => $receiptItem->lot->id,
+            'movement_type' => StockMovement::TYPE_RECEIPT,
+            'reference_type' => 'receipt',
+            'reference_id' => $receipt->id,
+            'quantity' => '2.500',
+            'unit_cost_base' => '1234.5678',
+            'base_currency_id' => $this->company->base_currency_id,
+        ]);
+
+        $this->get(route('inventory.receipts.show', $receipt))
+            ->assertOk()
+            ->assertSee('Entrada directa')
+            ->assertSee('DON-001')
+            ->assertSee(__('receipt_reason.donation'));
+        $this->assertDatabaseHas('audit_logs', [
+            'action' => 'received_directly',
+            'entity_type' => 'receipt',
+            'entity_id' => $receipt->id,
+        ]);
+    }
+
+    public function test_direct_receipts_require_the_dedicated_permission_and_tracked_product_expiration(): void
+    {
+        $role = Role::create([
+            'name' => 'Solo recepción de órdenes',
+            'slug' => 'solo-recepcion-ordenes',
+            'description' => 'Prueba de permiso de recepción directa.',
+            'is_system' => false,
+            'is_active' => true,
+        ]);
+        $role->permissions()->attach(Permission::query()->where('code', 'inventory.receipts.create')->value('id'));
+        $user = User::factory()->create();
+        $user->roles()->attach($role);
+        $user->warehouses()->attach($this->warehouse);
+
+        $this->actingAs($user)
+            ->get(route('inventory.receipts.create', ['mode' => 'direct']))
+            ->assertForbidden();
+        $this->post(route('inventory.receipts.store'), [
+            'source_type' => 'direct',
+        ])->assertForbidden();
+
+        $this->product->update(['tracks_expiration' => true]);
+        $this->actingAs($this->warehouseOperator)
+            ->post(route('inventory.receipts.store'), [
+                'source_type' => 'direct',
+                'warehouse_id' => $this->warehouse->id,
+                'direct_reason' => 'opening_balance',
+                'items' => [
+                    [
+                        'product_id' => $this->product->id,
+                        'quantity' => '1.000',
+                        'unit_cost' => '10.0000',
+                    ],
+                ],
+            ])
+            ->assertSessionHasErrors('items.0.expires_on');
+
+        $this->assertSame(0, Receipt::query()->count());
+        $this->assertSame(0, StockMovement::query()->count());
+    }
+
+    public function test_direct_issues_require_their_permission_and_record_reason_stock_and_audit(): void
+    {
+        $issueOnlyRole = Role::create([
+            'name' => 'Solo salidas de requisición',
+            'slug' => 'solo-salidas-requisicion',
+            'is_active' => true,
+        ]);
+        $issueOnlyRole->permissions()->attach(
+            Permission::query()->where('code', 'inventory.issues.create')->value('id'),
+        );
+        $issueOnlyUser = User::factory()->create();
+        $issueOnlyUser->roles()->attach($issueOnlyRole);
+        $issueOnlyUser->warehouses()->attach($this->warehouse);
+
+        $this->actingAs($issueOnlyUser)
+            ->get(route('inventory.issues.create', ['mode' => 'direct']))
+            ->assertForbidden();
+        $this->post(route('inventory.issues.store'), [
+            'source_type' => 'direct',
+        ])->assertForbidden();
+        $this->assertSame(0, InventoryIssue::query()->count());
+
+        $this->product->update(['tracks_expiration' => true]);
+        $this->actingAs($this->warehouseOperator)->post(route('inventory.receipts.store'), [
+            'source_type' => 'direct',
+            'warehouse_id' => $this->warehouse->id,
+            'direct_reason' => 'opening_balance',
+            'items' => [
+                [
+                    'product_id' => $this->product->id,
+                    'quantity' => '2.500',
+                    'unit_cost' => '1234.5678',
+                    'expires_on' => today()->addDays(30)->toDateString(),
+                ],
+            ],
+        ])->assertRedirect();
+
+        $this->get(route('inventory.issues.create', ['mode' => 'direct']))
+            ->assertOk()
+            ->assertSee('Crear salida directa')
+            ->assertSee('Buscar producto')
+            ->assertSee('Disponible vigente')
+            ->assertSee('Cantidad a despachar')
+            ->assertSee('data-allocation-note="Asignación por vencimiento próximo (FEFO), excluyendo lotes vencidos."', false)
+            ->assertSee('"'.$this->product->id.'":2500', false)
+            ->assertSee('role="combobox"', false)
+            ->assertSee($this->product->code);
+
+        $this->post(route('inventory.issues.store'), [
+            'source_type' => 'direct',
+            'warehouse_id' => $this->warehouse->id,
+            'direct_reason' => 'internal_consumption',
+            'items' => [
+                ['product_id' => $this->product->id, 'quantity' => '3.000'],
+            ],
+        ])->assertSessionHasErrors('items.0.quantity');
+        $this->assertSame(0, InventoryIssue::query()->count());
+
+        $this->post(route('inventory.issues.store'), [
+            'source_type' => 'direct',
+            'warehouse_id' => $this->warehouse->id,
+            'direct_reason' => 'internal_consumption',
+            'document_reference' => 'INT-001',
+            'items' => [
+                ['product_id' => $this->product->id, 'quantity' => '1.500'],
+            ],
+        ])->assertRedirect();
+
+        $issue = InventoryIssue::query()->firstOrFail();
+        $this->assertSame('direct', $issue->source_type);
+        $this->assertSame('internal_consumption', $issue->direct_reason);
+        $this->assertNull($issue->requisition_id);
+        $this->assertSame('INT-001', $issue->document_reference);
+        $issueItem = $issue->items()->firstOrFail();
+        $this->assertNull($issueItem->requisition_item_id);
+        $this->assertDatabaseHas('stock_movements', [
+            'warehouse_id' => $this->warehouse->id,
+            'product_id' => $this->product->id,
+            'movement_type' => StockMovement::TYPE_ISSUE,
+            'reference_type' => 'inventory_issue',
+            'reference_id' => $issue->id,
+            'quantity' => '1.500',
+            'base_currency_id' => $this->company->base_currency_id,
+        ]);
+
+        $this->get(route('inventory.issues.show', $issue))
+            ->assertOk()
+            ->assertSee('Salida directa')
+            ->assertSee(__('issue_reason.internal_consumption'))
+            ->assertSee('INT-001');
+        $this->get(route('inventory.issues.index'))
+            ->assertOk()
+            ->assertSee('Salida directa')
+            ->assertSee(__('issue_reason.internal_consumption'));
+        $this->assertDatabaseHas('audit_logs', [
+            'action' => 'issued_directly',
+            'entity_type' => 'inventory_issue',
+            'entity_id' => $issue->id,
+        ]);
+    }
+
+    public function test_receipt_and_issue_lists_follow_the_shared_inventory_page_layout(): void
+    {
+        $this->actingAs($this->warehouseOperator)
+            ->get(route('inventory.receipts.index'))
+            ->assertOk()
+            ->assertSee('movement-list-card', false)
+            ->assertSee('No hay entradas para mostrar.')
+            ->assertSee('Consulta los recibos registrados y revisa sus productos, bodegas y fechas.');
+
+        $this->get(route('inventory.issues.index'))
+            ->assertOk()
+            ->assertSee('movement-list-card', false)
+            ->assertSee('No hay salidas para mostrar.')
+            ->assertSee('Consulta los despachos registrados y revisa su origen, bodegas y fechas.');
     }
 
     public function test_issues_are_partial_use_fefo_lot_costs_and_never_dispatch_expired_stock(): void
@@ -208,8 +736,17 @@ class InventoryMovementTest extends TestCase
         $issueRequisition = $this->activeRequisition('6.000');
         $issueItem = $issueRequisition->items()->firstOrFail();
         $this->actingAs($this->warehouseOperator)
+            ->get(route('inventory.issues.create'))
+            ->assertOk()
+            ->assertSee('Salidas desde requisiciones')
+            ->assertSee('Crear salida directa')
+            ->assertSee($issueRequisition->reference)
+            ->assertSee($this->product->name)
+            ->assertSee('Registrar salida');
+        $this->actingAs($this->warehouseOperator)
             ->get(route('inventory.issues.create', ['requisition_id' => $issueRequisition->id]))
             ->assertOk()
+            ->assertSee('Requisición activa para despacho')
             ->assertSee($this->product->name);
         $this->actingAs($this->warehouseOperator)
             ->post(route('inventory.issues.store'), [
@@ -233,6 +770,7 @@ class InventoryMovementTest extends TestCase
             ],
         ])->assertRedirect(route('inventory.issues.index'));
         $firstIssue = InventoryIssue::query()->oldest('id')->firstOrFail();
+        $this->assertSame(Requisition::STATUS_ACTIVE, $issueRequisition->fresh()->status);
         $this->get(route('inventory.issues.show', $firstIssue))->assertOk();
         $this->get(route('inventory.issues.index'))->assertOk();
 
@@ -421,6 +959,9 @@ class InventoryMovementTest extends TestCase
         $this->assertSame('4000.00000000', $order->exchange_rate);
         $this->assertEquals(5001000.0, (float) $order->items()->firstOrFail()->unit_cost_base);
 
+        $this->actingAs($this->orderCreator)
+            ->post(route('purchasing.orders.submit', $order))
+            ->assertRedirect();
         $this->actingAs($this->orderApprover)
             ->post(route('purchasing.orders.approve', $order))
             ->assertRedirect();
@@ -1150,6 +1691,9 @@ class InventoryMovementTest extends TestCase
     ): PurchaseOrder {
         $requisition = $this->approvedRequisition($quantity, $warehouse, $product);
         $order = $this->createPurchaseOrder($requisition, $unitCost);
+        $this->actingAs($this->orderCreator)
+            ->post(route('purchasing.orders.submit', $order))
+            ->assertRedirect();
         $this->actingAs($this->orderApprover)
             ->post(route('purchasing.orders.approve', $order))
             ->assertRedirect();

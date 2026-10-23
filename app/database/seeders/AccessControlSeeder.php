@@ -36,12 +36,18 @@ class AccessControlSeeder extends Seeder
                 ['name' => 'Registrar cotizaciones de proveedores', 'code' => 'purchases.quotes.manage', 'module' => 'compras', 'description' => 'Crear, completar o actualizar las ofertas recibidas para una requisición.'],
                 ['name' => 'Adjudicar ofertas de cotización', 'code' => 'purchases.quotes.award', 'module' => 'compras', 'description' => 'Seleccionar la oferta ganadora por producto y guardar la comparación.'],
                 ['name' => 'Generar órdenes desde cotizaciones', 'code' => 'purchases.quotes.generate_orders', 'module' => 'compras', 'description' => 'Generar órdenes de compra borrador a partir de ofertas adjudicadas.'],
+                ['name' => 'Crear órdenes de compra directas', 'code' => 'purchases.orders.create_direct', 'module' => 'compras', 'description' => 'Crear órdenes sin cotización desde requisiciones aprobadas o sin requisición.'],
                 ['name' => 'Consultar órdenes de compra', 'code' => 'purchases.orders.view', 'module' => 'compras'],
+                ['name' => 'Enviar órdenes de compra a aprobación', 'code' => 'purchases.orders.submit', 'module' => 'compras', 'description' => 'Enviar órdenes propias para revisión independiente.'],
                 ['name' => 'Aprobar órdenes de compra', 'code' => 'purchases.orders.approve', 'module' => 'compras'],
+                ['name' => 'Aprobar cualquier orden de compra (Administración)', 'code' => 'purchases.orders.approve_any', 'module' => 'compras', 'description' => 'Permite al perfil Administración aprobar órdenes pendientes incluso si fueron creadas por el mismo usuario.'],
+                ['name' => 'Rechazar órdenes de compra', 'code' => 'purchases.orders.reject', 'module' => 'compras', 'description' => 'Rechazar órdenes pendientes con un motivo y devolverlas a su creador para corrección.'],
                 ['name' => 'Consultar entradas de inventario', 'code' => 'inventory.receipts.view', 'module' => 'inventario'],
                 ['name' => 'Registrar entradas de inventario', 'code' => 'inventory.receipts.create', 'module' => 'inventario'],
+                ['name' => 'Registrar entradas directas de inventario', 'code' => 'inventory.receipts.direct.create', 'module' => 'inventario', 'description' => 'Registrar entradas autorizadas sin orden de compra, con motivo y costo unitario en moneda base.'],
                 ['name' => 'Consultar salidas de inventario', 'code' => 'inventory.issues.view', 'module' => 'inventario'],
                 ['name' => 'Registrar salidas de inventario', 'code' => 'inventory.issues.create', 'module' => 'inventario'],
+                ['name' => 'Registrar salidas directas de inventario', 'code' => 'inventory.issues.direct.create', 'module' => 'inventario', 'description' => 'Registrar salidas directas autorizadas con motivo y referencia documental opcional.'],
                 ['name' => 'Consultar kardex de inventario', 'code' => 'inventory.movements.view', 'module' => 'inventario'],
             ];
 
@@ -101,8 +107,11 @@ class AccessControlSeeder extends Seeder
                     'purchases.quotes.manage',
                     'purchases.quotes.award',
                     'purchases.quotes.generate_orders',
+                    'purchases.orders.create_direct',
                     'purchases.orders.view',
+                    'purchases.orders.submit',
                     'purchases.orders.approve',
+                    'purchases.orders.reject',
                 ])->pluck('id'),
             );
 
@@ -113,8 +122,10 @@ class AccessControlSeeder extends Seeder
                     'inventory.requisitions.dispatch',
                     'inventory.receipts.view',
                     'inventory.receipts.create',
+                    'inventory.receipts.direct.create',
                     'inventory.issues.view',
                     'inventory.issues.create',
+                    'inventory.issues.direct.create',
                     'inventory.movements.view',
                 ])->pluck('id'),
             );

@@ -419,6 +419,7 @@ class QuoteComparisonController extends Controller
             $order = PurchaseOrder::create([
                 'reference' => 'TMP-'.Str::random(24),
                 'requisition_id' => $requisition->id,
+                'warehouse_id' => $requisition->warehouse_id,
                 'supplier_quote_id' => $quote->id,
                 'supplier_id' => $quote->supplier_id,
                 'quote_currency_id' => $quote->quote_currency_id,

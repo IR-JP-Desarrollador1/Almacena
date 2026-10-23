@@ -95,10 +95,27 @@
                     'breadcrumb' => 'Kardex',
                     'description' => 'Consulta en un mismo informe todos los movimientos de las bodegas y productos a los que tienes acceso. Los filtros son opcionales y el saldo se calcula por producto y bodega.',
                 ],
+                request()->routeIs('inventory.receipts.*') => [
+                    'section' => 'INVENTARIO',
+                    'breadcrumb' => 'Entradas de inventario',
+                    'description' => 'Consulta los recibos registrados y revisa sus productos, bodegas y fechas.',
+                ],
+                request()->routeIs('inventory.issues.*') => [
+                    'section' => 'INVENTARIO',
+                    'breadcrumb' => 'Salidas de inventario',
+                    'description' => 'Consulta los despachos registrados y revisa su origen, bodegas y fechas.',
+                ],
                 request()->routeIs('inventory.requisitions.*') => [
                     'section' => 'INVENTARIO',
                     'breadcrumb' => 'Requisiciones',
                     'description' => 'Gestiona borradores, envía solicitudes a aprobación y registra las salidas parciales de inventario.',
+                ],
+                request()->routeIs('purchasing.orders.direct.create') => [
+                    'section' => 'COMPRAS',
+                    'breadcrumb' => 'Órdenes de compra',
+                    'description' => request()->query('mode')
+                        ? 'Completa los datos y productos de la orden. Debe aprobarse antes de recibir productos.'
+                        : 'Elige cómo originar la orden. Todas las órdenes deben aprobarse antes de recibir productos.',
                 ],
                 request()->routeIs('purchasing.orders.*') => [
                     'section' => 'COMPRAS',

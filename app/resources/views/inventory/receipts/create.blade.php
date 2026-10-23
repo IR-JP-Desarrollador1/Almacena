@@ -8,10 +8,11 @@
     <main class="mx-auto max-w-5xl space-y-5 px-4 py-8 sm:px-6 lg:px-8">
         @if ($errors->any())<div class="rounded-md bg-red-50 p-4 text-sm text-red-800">{{ $errors->all()[0] }}</div>@endif
         <section class="rounded-lg bg-white p-6 shadow">
-            <p class="text-sm text-gray-600">{{ __('Orden aprobada') }}: <strong>{{ $purchaseOrder->reference }}</strong> · {{ $purchaseOrder->supplier->legal_name }} · {{ $purchaseOrder->requisition->warehouse->name }}</p>
+            <p class="text-sm text-gray-600">{{ __('Orden aprobada') }}: <strong>{{ $purchaseOrder->reference }}</strong> · {{ $purchaseOrder->supplier->legal_name }} · {{ $purchaseOrder->warehouse->name }}</p>
         </section>
         <form method="POST" action="{{ route('inventory.receipts.store') }}" class="space-y-5">
             @csrf
+            <input type="hidden" name="source_type" value="purchase_order">
             <input type="hidden" name="purchase_order_id" value="{{ $purchaseOrder->id }}">
             <section class="rounded-lg bg-white p-6 shadow">
                 <label for="document_reference" class="block text-sm font-medium text-gray-700">{{ __('Referencia del documento de recepción (opcional)') }}</label>

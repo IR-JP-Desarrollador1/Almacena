@@ -290,7 +290,16 @@ class InventoryMovementController extends Controller
 
     public function showReceipt(Request $request, Receipt $receipt): View
     {
-        $receipt->load(['purchaseOrder.quoteCurrency', 'purchaseOrder.baseCurrency', 'warehouse.branch', 'receiver', 'items.product', 'items.lot']);
+        $receipt->load([
+            'purchaseOrder.quoteCurrency',
+            'purchaseOrder.baseCurrency',
+            'purchaseOrder.supplier',
+            'warehouse.branch',
+            'receiver',
+            'items.product.unit',
+            'items.lot.quoteCurrency',
+            'items.lot.baseCurrency',
+        ]);
         abort_unless(
             $receipt->warehouse->branch->company_id === $this->company()->id
                 && $request->user()->canAccessWarehouse($receipt->warehouse_id),
@@ -307,8 +316,35 @@ class InventoryMovementController extends Controller
 
     public function createReceipt(Request $request): View
     {
+        if ($request->query('mode') === 'direct') {
+            abort_unless($request->user()->hasPermission('inventory.receipts.direct.create'), 403);
+
+            $company = $this->company()->load('baseCurrency');
+
+            return view('inventory.receipts.create-direct', [
+                'warehouses' => $request->user()->accessibleWarehouses()->orderBy('name')->get(),
+                'products' => Product::query()
+                    ->where('is_active', true)
+                    ->with('unit')
+                    ->orderBy('code')
+                    ->get(),
+                'baseCurrency' => $company->baseCurrency,
+                'reasons' => [
+                    'opening_balance' => __('receipt_reason.opening_balance'),
+                    'donation' => __('receipt_reason.donation'),
+                    'return' => __('receipt_reason.return'),
+                    'positive_adjustment' => __('receipt_reason.positive_adjustment'),
+                ],
+            ]);
+        }
+
+        if (! $request->filled('purchase_order_id')) {
+            return $this->receiptSourceSelection($request);
+        }
+
+        abort_unless($request->user()->hasPermission('inventory.receipts.create'), 403);
         $order = $this->accessibleOrder((int) $request->query('purchase_order_id'), $request)
-            ->load(['items.product', 'receipts.items', 'requisition.warehouse.branch']);
+            ->load(['items.product', 'receipts.items', 'warehouse.branch']);
         abort_unless($order->status === PurchaseOrder::STATUS_APPROVED, 403);
 
         $items = $order->items->map(function (PurchaseOrderItem $item) {
@@ -328,7 +364,13 @@ class InventoryMovementController extends Controller
 
     public function storeReceipt(Request $request): RedirectResponse
     {
+        if ($request->input('source_type') === 'direct') {
+            return $this->storeDirectReceipt($request);
+        }
+
+        abort_unless($request->user()->hasPermission('inventory.receipts.create'), 403);
         $validated = $request->validate([
+            'source_type' => ['sometimes', Rule::in(['purchase_order'])],
             'purchase_order_id' => ['required', 'integer', 'exists:purchase_orders,id'],
             'document_reference' => ['nullable', 'string', 'max:100'],
             'items' => ['required', 'array', 'min:1', 'max:100'],
@@ -343,11 +385,11 @@ class InventoryMovementController extends Controller
             $order = PurchaseOrder::query()
                 ->whereKey($validated['purchase_order_id'])
                 ->where('status', PurchaseOrder::STATUS_APPROVED)
-                ->whereHas('requisition.department', fn (Builder $departments) => $departments->where('company_id', $companyId))
-                ->with(['items.product', 'requisition'])
+                ->whereHas('warehouse.branch', fn (Builder $branches) => $branches->where('company_id', $companyId))
+                ->with(['items.product', 'warehouse'])
                 ->lockForUpdate()
                 ->firstOrFail();
-            $warehouseId = $order->requisition->warehouse_id;
+            $warehouseId = $order->warehouse_id;
             abort_unless($warehouseId !== null && $user->canAccessWarehouse($warehouseId), 403);
 
             $orderItems = $order->items->keyBy('id');
@@ -388,6 +430,7 @@ class InventoryMovementController extends Controller
             $receivedAt = now();
             $receipt = Receipt::create([
                 'reference' => 'TMP-'.Str::random(24),
+                'source_type' => 'purchase_order',
                 'purchase_order_id' => $order->id,
                 'warehouse_id' => $warehouseId,
                 'received_by_user_id' => $user->id,
@@ -448,10 +491,173 @@ class InventoryMovementController extends Controller
         return redirect()->route('inventory.receipts.index')->with('status', __('Entrada registrada correctamente.'));
     }
 
+    private function receiptSourceSelection(Request $request): View
+    {
+        $orders = null;
+        if ($request->user()->hasPermission('inventory.receipts.create')) {
+            $orders = PurchaseOrder::query()
+                ->where('status', PurchaseOrder::STATUS_APPROVED)
+                ->whereHas('warehouse.branch', fn (Builder $branches) => $branches->where('company_id', $this->company()->id))
+                ->when(
+                    ! $request->user()->hasGlobalWarehouseAccess(),
+                    fn (Builder $query) => $query->whereIn(
+                        'warehouse_id',
+                        $request->user()->accessibleWarehouses()->select('warehouses.id'),
+                    ),
+                )
+                ->whereHas('items', fn (Builder $items) => $items->whereRaw(
+                    'purchase_order_items.quantity > COALESCE((SELECT SUM(receipt_items.quantity) FROM receipt_items WHERE receipt_items.purchase_order_item_id = purchase_order_items.id), 0)',
+                ))
+                ->with([
+                    'supplier',
+                    'warehouse.branch',
+                    'items.receiptItems',
+                ])
+                ->latest()
+                ->paginate(20);
+
+            $orders->getCollection()->transform(function (PurchaseOrder $order) {
+                $order->setRelation('items', $order->items
+                    ->map(function (PurchaseOrderItem $item) {
+                        $item->remaining_quantity = max(0, (float) $item->quantity - (float) $item->receiptItems->sum('quantity'));
+
+                        return $item;
+                    })
+                    ->filter(fn (PurchaseOrderItem $item) => $item->remaining_quantity > 0));
+
+                return $order;
+            });
+        }
+
+        return view('inventory.receipts.select-source', [
+            'orders' => $orders,
+            'canCreateDirect' => $request->user()->hasPermission('inventory.receipts.direct.create'),
+        ]);
+    }
+
+    private function storeDirectReceipt(Request $request): RedirectResponse
+    {
+        abort_unless($request->user()->hasPermission('inventory.receipts.direct.create'), 403);
+
+        $validated = $request->validate([
+            'source_type' => ['required', Rule::in(['direct'])],
+            'warehouse_id' => ['required', 'integer', 'exists:warehouses,id'],
+            'direct_reason' => ['required', Rule::in(['opening_balance', 'donation', 'return', 'positive_adjustment'])],
+            'document_reference' => ['nullable', 'string', 'max:100'],
+            'items' => ['required', 'array', 'min:1', 'max:100'],
+            'items.*.product_id' => ['required', 'integer', 'distinct', 'exists:products,id'],
+            'items.*.quantity' => ['required', 'numeric', 'decimal:0,3', 'gt:0', 'max:999999999.999'],
+            'items.*.unit_cost' => ['required', 'numeric', 'decimal:0,4', 'gt:0', 'max:99999999999.9999'],
+            'items.*.expires_on' => ['nullable', 'date', 'after_or_equal:today'],
+        ]);
+
+        $company = $this->company();
+        $user = $request->user();
+        $receipt = DB::transaction(function () use ($validated, $request, $company, $user) {
+            $warehouse = $user->accessibleWarehouses()
+                ->whereKey($validated['warehouse_id'])
+                ->lockForUpdate()
+                ->firstOrFail();
+            $requestedItems = collect($validated['items']);
+            $products = Product::query()
+                ->whereIn('id', $requestedItems->pluck('product_id'))
+                ->where('is_active', true)
+                ->with('unit')
+                ->lockForUpdate()
+                ->get()
+                ->keyBy('id');
+
+            if ($products->count() !== $requestedItems->count()) {
+                throw ValidationException::withMessages([
+                    'items' => __('Selecciona únicamente productos activos del catálogo.'),
+                ]);
+            }
+
+            foreach ($requestedItems as $index => $item) {
+                $product = $products[(int) $item['product_id']];
+                $expiresOn = $item['expires_on'] ?? null;
+                if ($product->tracks_expiration && ! $expiresOn) {
+                    throw ValidationException::withMessages([
+                        "items.{$index}.expires_on" => __('Este producto requiere fecha de vencimiento.'),
+                    ]);
+                }
+                if (! $product->tracks_expiration && $expiresOn) {
+                    throw ValidationException::withMessages([
+                        "items.{$index}.expires_on" => __('No registres vencimiento para un producto que no controla fecha de expiración.'),
+                    ]);
+                }
+            }
+
+            $receivedAt = now();
+            $receipt = Receipt::query()->create([
+                'reference' => 'TMP-'.Str::random(24),
+                'source_type' => 'direct',
+                'direct_reason' => $validated['direct_reason'],
+                'purchase_order_id' => null,
+                'warehouse_id' => $warehouse->id,
+                'received_by_user_id' => $user->id,
+                'document_reference' => $validated['document_reference'] ?? null,
+                'received_at' => $receivedAt,
+            ]);
+            $receipt->update(['reference' => 'ENT-'.str_pad((string) $receipt->id, 8, '0', STR_PAD_LEFT)]);
+
+            foreach ($requestedItems as $item) {
+                $product = $products[(int) $item['product_id']];
+                $receiptItem = ReceiptItem::query()->create([
+                    'receipt_id' => $receipt->id,
+                    'purchase_order_item_id' => null,
+                    'product_id' => $product->id,
+                    'quantity' => $item['quantity'],
+                    'unit_cost' => $item['unit_cost'],
+                    'unit_cost_base' => $item['unit_cost'],
+                    'expires_on' => $item['expires_on'] ?? null,
+                ]);
+                $lot = WarehouseLot::query()->create([
+                    'warehouse_id' => $warehouse->id,
+                    'product_id' => $product->id,
+                    'receipt_item_id' => $receiptItem->id,
+                    'lot_code' => $receipt->reference.'-'.str_pad((string) $receiptItem->id, 4, '0', STR_PAD_LEFT),
+                    'quantity_received' => $item['quantity'],
+                    'unit_cost' => $item['unit_cost'],
+                    'unit_cost_base' => $item['unit_cost'],
+                    'quote_currency_id' => $company->base_currency_id,
+                    'base_currency_id' => $company->base_currency_id,
+                    'exchange_rate' => '1.00000000',
+                    'expires_on' => $item['expires_on'] ?? null,
+                    'received_at' => $receivedAt,
+                ]);
+                StockMovement::query()->create([
+                    'warehouse_lot_id' => $lot->id,
+                    'warehouse_id' => $warehouse->id,
+                    'product_id' => $product->id,
+                    'user_id' => $user->id,
+                    'movement_type' => StockMovement::TYPE_RECEIPT,
+                    'reference_type' => 'receipt',
+                    'reference_id' => $receipt->id,
+                    'quantity' => $item['quantity'],
+                    'unit_cost_base' => $item['unit_cost'],
+                    'base_currency_id' => $company->base_currency_id,
+                    'occurred_at' => $receivedAt,
+                ]);
+            }
+
+            $this->audit($request, $company->id, 'received_directly', 'receipt', $receipt->id, [
+                'source_type' => $receipt->source_type,
+                'direct_reason' => $receipt->direct_reason,
+                'warehouse_id' => $warehouse->id,
+                'items' => $receipt->items()->get(['product_id', 'quantity', 'unit_cost', 'unit_cost_base', 'expires_on'])->toArray(),
+            ]);
+
+            return $receipt;
+        });
+
+        return redirect()->route('inventory.receipts.show', $receipt)->with('status', __('Entrada registrada correctamente.'));
+    }
+
     public function issues(Request $request): View
     {
         $query = InventoryIssue::query()
-            ->whereHas('requisition.department', fn (Builder $departments) => $departments->where('company_id', $this->company()->id))
+            ->whereHas('warehouse.branch', fn (Builder $branches) => $branches->where('company_id', $this->company()->id))
             ->with(['requisition', 'warehouse.branch', 'issuer', 'items'])
             ->latest();
         $this->scopeWarehouses($query, $request->user());
@@ -481,6 +687,63 @@ class InventoryMovementController extends Controller
 
     public function createIssue(Request $request): View
     {
+        if ($request->query('mode') === 'direct') {
+            abort_unless($request->user()->hasPermission('inventory.issues.direct.create'), 403);
+
+            $company = $this->company();
+            $companyId = $company->id;
+            $warehouses = $request->user()->accessibleWarehouses()
+                ->whereHas('branch', fn (Builder $branches) => $branches->where('company_id', $companyId))
+                ->with('branch')
+                ->orderBy('name')
+                ->get();
+            $products = Product::query()
+                ->where('is_active', true)
+                ->with('unit')
+                ->orderBy('code')
+                ->get();
+            $availableQuantities = [];
+
+            if ($warehouses->isNotEmpty() && $products->isNotEmpty()) {
+                $lots = WarehouseLot::query()
+                    ->whereIn('warehouse_id', $warehouses->modelKeys())
+                    ->whereIn('product_id', $products->modelKeys())
+                    ->with(['product:id,tracks_expiration', 'movements'])
+                    ->get();
+
+                foreach ($lots as $lot) {
+                    $tracksExpiration = (bool) $lot->product->tracks_expiration;
+                    if ($tracksExpiration && (! $lot->expires_on || $lot->expires_on->lt(today()))) {
+                        continue;
+                    }
+                    if (! $tracksExpiration && $lot->expires_on) {
+                        continue;
+                    }
+
+                    $balanceMilli = $lot->movements->sum(fn (StockMovement $movement) => $movement->movement_type === StockMovement::TYPE_RECEIPT
+                        ? $this->quantityMilli($movement->quantity)
+                        : -$this->quantityMilli($movement->quantity));
+                    $availableQuantities[$lot->warehouse_id][$lot->product_id] = ($availableQuantities[$lot->warehouse_id][$lot->product_id] ?? 0)
+                        + max(0, $balanceMilli);
+                }
+            }
+
+            return view('inventory.issues.create-direct', [
+                'warehouses' => $warehouses,
+                'products' => $products,
+                'availableQuantities' => $availableQuantities,
+                'regional' => RegionalFormatter::fromCompany($company),
+                'reasons' => [
+                    'internal_consumption' => __('issue_reason.internal_consumption'),
+                    'loss_damage' => __('issue_reason.loss_damage'),
+                ],
+            ]);
+        }
+
+        if (! $request->filled('requisition_id')) {
+            return $this->issueSourceSelection($request);
+        }
+
         abort_unless($request->user()->hasPermission('inventory.requisitions.dispatch'), 403);
         $requisition = $this->accessibleRequisition((int) $request->query('requisition_id'), $request)
             ->load(['items.product', 'items.inventoryIssueItems', 'warehouse.branch']);
@@ -502,9 +765,58 @@ class InventoryMovementController extends Controller
         return view('inventory.issues.create', compact('requisition', 'items'));
     }
 
+    private function issueSourceSelection(Request $request): View
+    {
+        $requisitions = null;
+        if ($request->user()->hasPermission('inventory.requisitions.dispatch')) {
+            $requisitions = Requisition::query()
+                ->whereIn('status', [Requisition::STATUS_ACTIVE, Requisition::STATUS_APPROVED])
+                ->whereNotNull('warehouse_id')
+                ->whereHas('department', fn (Builder $departments) => $departments->where('company_id', $this->company()->id))
+                ->when(
+                    ! $request->user()->hasGlobalWarehouseAccess(),
+                    fn (Builder $query) => $query->whereIn(
+                        'warehouse_id',
+                        $request->user()->accessibleWarehouses()->select('warehouses.id'),
+                    ),
+                )
+                ->whereHas('items', fn (Builder $items) => $items->whereRaw(
+                    'requisition_items.quantity > COALESCE((SELECT SUM(inventory_issue_items.quantity) FROM inventory_issue_items WHERE inventory_issue_items.requisition_item_id = requisition_items.id), 0)',
+                ))
+                ->with(['warehouse.branch', 'items.inventoryIssueItems'])
+                ->latest()
+                ->paginate(20);
+
+            $requisitions->getCollection()->transform(function (Requisition $requisition) {
+                $requisition->setRelation('items', $requisition->items
+                    ->map(function (RequisitionItem $item) {
+                        $issuedMilli = $item->inventoryIssueItems->sum(
+                            fn (InventoryIssueItem $issueItem) => $this->quantityMilli($issueItem->quantity),
+                        );
+                        $item->remaining_milli = max(0, $this->quantityMilli($item->quantity) - $issuedMilli);
+
+                        return $item;
+                    })
+                    ->filter(fn (RequisitionItem $item) => $item->remaining_milli > 0));
+
+                return $requisition;
+            });
+        }
+
+        return view('inventory.issues.select-source', [
+            'requisitions' => $requisitions,
+            'canCreateDirect' => $request->user()->hasPermission('inventory.issues.direct.create'),
+        ]);
+    }
+
     public function storeIssue(Request $request): RedirectResponse
     {
+        if ($request->input('source_type') === InventoryIssue::SOURCE_DIRECT) {
+            return $this->storeDirectIssue($request);
+        }
+
         $validated = $request->validate([
+            'source_type' => ['sometimes', Rule::in([InventoryIssue::SOURCE_REQUISITION])],
             'requisition_id' => ['required', 'integer', 'exists:requisitions,id'],
             'document_reference' => ['nullable', 'string', 'max:100'],
             'items' => ['required', 'array', 'min:1', 'max:100'],
@@ -556,6 +868,7 @@ class InventoryMovementController extends Controller
             $issuedAt = now();
             $issue = InventoryIssue::create([
                 'reference' => 'TMP-'.Str::random(24),
+                'source_type' => InventoryIssue::SOURCE_REQUISITION,
                 'requisition_id' => $requisition->id,
                 'warehouse_id' => $warehouseId,
                 'issued_by_user_id' => $user->id,
@@ -612,16 +925,126 @@ class InventoryMovementController extends Controller
         return redirect()->route('inventory.issues.index')->with('status', __('Salida registrada correctamente.'));
     }
 
+    private function storeDirectIssue(Request $request): RedirectResponse
+    {
+        abort_unless($request->user()->hasPermission('inventory.issues.direct.create'), 403);
+
+        $validated = $request->validate([
+            'source_type' => ['required', Rule::in([InventoryIssue::SOURCE_DIRECT])],
+            'warehouse_id' => ['required', 'integer', 'exists:warehouses,id'],
+            'direct_reason' => ['required', Rule::in(['internal_consumption', 'loss_damage'])],
+            'document_reference' => ['nullable', 'string', 'max:100'],
+            'items' => ['required', 'array', 'min:1', 'max:100'],
+            'items.*.product_id' => ['required', 'integer', 'distinct', 'exists:products,id'],
+            'items.*.quantity' => ['required', 'numeric', 'decimal:0,3', 'gt:0', 'max:999999999.999'],
+        ]);
+        $companyId = $this->company()->id;
+        $user = $request->user();
+
+        $issue = DB::transaction(function () use ($validated, $request, $companyId, $user) {
+            $warehouse = $user->accessibleWarehouses()
+                ->whereKey($validated['warehouse_id'])
+                ->whereHas('branch', fn (Builder $branches) => $branches->where('company_id', $companyId))
+                ->lockForUpdate()
+                ->firstOrFail();
+            $requestedItems = collect($validated['items']);
+            $products = Product::query()
+                ->whereIn('id', $requestedItems->pluck('product_id'))
+                ->where('is_active', true)
+                ->with('unit')
+                ->lockForUpdate()
+                ->get()
+                ->keyBy('id');
+
+            if ($products->count() !== $requestedItems->count()) {
+                throw ValidationException::withMessages([
+                    'items' => __('Selecciona únicamente productos activos del catálogo.'),
+                ]);
+            }
+
+            $allocationPlans = [];
+            foreach ($requestedItems as $index => $item) {
+                $product = $products[(int) $item['product_id']];
+                $allocationPlans[$product->id] = $this->planLotAllocations(
+                    $warehouse->id,
+                    $product,
+                    $this->quantityMilli($item['quantity']),
+                    $index,
+                );
+            }
+
+            $issuedAt = now();
+            $issue = InventoryIssue::query()->create([
+                'reference' => 'TMP-'.Str::random(24),
+                'source_type' => InventoryIssue::SOURCE_DIRECT,
+                'direct_reason' => $validated['direct_reason'],
+                'requisition_id' => null,
+                'warehouse_id' => $warehouse->id,
+                'issued_by_user_id' => $user->id,
+                'document_reference' => $validated['document_reference'] ?? null,
+                'issued_at' => $issuedAt,
+            ]);
+            $issue->update(['reference' => 'SAL-'.str_pad((string) $issue->id, 8, '0', STR_PAD_LEFT)]);
+
+            foreach ($requestedItems as $item) {
+                $product = $products[(int) $item['product_id']];
+                $issueItem = InventoryIssueItem::query()->create([
+                    'inventory_issue_id' => $issue->id,
+                    'requisition_item_id' => null,
+                    'product_id' => $product->id,
+                    'product_code' => $product->code,
+                    'product_name' => $product->name,
+                    'unit_abbreviation' => $product->unit->abbreviation,
+                    'quantity' => $item['quantity'],
+                ]);
+
+                foreach ($allocationPlans[$product->id] as $allocation) {
+                    InventoryIssueAllocation::query()->create([
+                        'inventory_issue_item_id' => $issueItem->id,
+                        'warehouse_lot_id' => $allocation['lot']->id,
+                        'quantity' => $this->quantityString($allocation['quantity_milli']),
+                        'unit_cost' => $allocation['lot']->unit_cost,
+                        'unit_cost_base' => $allocation['lot']->unit_cost_base,
+                    ]);
+                    StockMovement::query()->create([
+                        'warehouse_lot_id' => $allocation['lot']->id,
+                        'warehouse_id' => $warehouse->id,
+                        'product_id' => $product->id,
+                        'user_id' => $user->id,
+                        'movement_type' => StockMovement::TYPE_ISSUE,
+                        'reference_type' => 'inventory_issue',
+                        'reference_id' => $issue->id,
+                        'quantity' => $this->quantityString($allocation['quantity_milli']),
+                        'unit_cost_base' => $allocation['lot']->unit_cost_base,
+                        'base_currency_id' => $allocation['lot']->base_currency_id,
+                        'occurred_at' => $issuedAt,
+                    ]);
+                }
+            }
+
+            $this->audit($request, $companyId, 'issued_directly', 'inventory_issue', $issue->id, [
+                'source_type' => $issue->source_type,
+                'direct_reason' => $issue->direct_reason,
+                'document_reference' => $issue->document_reference,
+                'warehouse_id' => $warehouse->id,
+                'items' => $issue->items()->get(['product_id', 'quantity'])->toArray(),
+            ]);
+
+            return $issue;
+        });
+
+        return redirect()->route('inventory.issues.show', $issue)->with('status', __('Salida registrada correctamente.'));
+    }
+
     private function accessibleOrder(int $id, Request $request): PurchaseOrder
     {
         $order = PurchaseOrder::query()
             ->whereKey($id)
-            ->whereHas('requisition.department', fn (Builder $departments) => $departments->where('company_id', $this->company()->id))
-            ->with(['requisition.warehouse.branch'])
+            ->whereHas('warehouse.branch', fn (Builder $branches) => $branches->where('company_id', $this->company()->id))
+            ->with(['warehouse.branch'])
             ->firstOrFail();
         abort_unless(
-            $order->requisition->warehouse_id !== null
-                && $request->user()->canAccessWarehouse($order->requisition->warehouse_id),
+            $request->user()->canAccessWarehouse($order->warehouse_id),
             403,
         );
 

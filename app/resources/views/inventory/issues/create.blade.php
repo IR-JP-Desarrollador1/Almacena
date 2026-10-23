@@ -8,7 +8,10 @@
     <main class="mx-auto max-w-5xl space-y-5 px-4 py-8 sm:px-6 lg:px-8">
         @if ($errors->any())<div class="rounded-md bg-red-50 p-4 text-sm text-red-800">{{ $errors->all()[0] }}</div>@endif
         <section class="rounded-lg bg-white p-6 shadow">
-            <p class="text-sm text-gray-600">{{ __('Requisición aprobada') }}: <strong>{{ $requisition->reference }}</strong> · {{ $requisition->warehouse->branch->name }} / {{ $requisition->warehouse->name }}</p>
+            <p class="text-sm text-gray-600">{{ $requisition->status === \App\Models\Requisition::STATUS_ACTIVE ? __('Requisición activa para despacho') : __('Requisición aprobada') }}: <strong>{{ $requisition->reference }}</strong> · {{ $requisition->warehouse->branch->name }} / {{ $requisition->warehouse->name }}</p>
+            @if ($requisition->status === \App\Models\Requisition::STATUS_ACTIVE)
+                <p class="mt-2 text-sm text-gray-500">{{ __('Puedes despachar esta requisición sin enviarla a Compras; el saldo restante puede mantenerse para despacho o enviarse posteriormente a aprobación.') }}</p>
+            @endif
         </section>
         <form method="POST" action="{{ route('inventory.issues.store') }}" class="space-y-5">
             @csrf

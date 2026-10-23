@@ -7,7 +7,12 @@
     </x-slot>
     <main class="mx-auto max-w-6xl space-y-5 px-4 py-8 sm:px-6 lg:px-8">
         <section class="grid gap-5 rounded-lg bg-white p-6 shadow md:grid-cols-2">
-            <div><p class="text-xs uppercase text-gray-500">{{ __('Requisición') }}</p><p class="mt-1">{{ $issue->requisition->reference }}</p></div>
+            @if ($issue->source_type === \App\Models\InventoryIssue::SOURCE_DIRECT)
+                <div><p class="text-xs uppercase text-gray-500">{{ __('Tipo de salida') }}</p><p class="mt-1">{{ __('Salida directa') }}</p></div>
+                <div><p class="text-xs uppercase text-gray-500">{{ __('Motivo de la salida') }}</p><p class="mt-1">{{ __('issue_reason.'.$issue->direct_reason) }}</p></div>
+            @else
+                <div><p class="text-xs uppercase text-gray-500">{{ __('Requisición') }}</p><p class="mt-1">{{ $issue->requisition?->reference ?? '—' }}</p></div>
+            @endif
             <div><p class="text-xs uppercase text-gray-500">{{ __('Bodega') }}</p><p class="mt-1">{{ $issue->warehouse->branch->name }} / {{ $issue->warehouse->name }}</p></div>
             <div><p class="text-xs uppercase text-gray-500">{{ __('Entregada por') }}</p><p class="mt-1">{{ $issue->issuer->name }} {{ $issue->issuer->last_name }}</p></div>
             <div><p class="text-xs uppercase text-gray-500">{{ __('Fecha') }}</p><p class="mt-1">{{ $regional->dateTime($issue->issued_at) }}</p></div>

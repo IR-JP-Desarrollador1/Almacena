@@ -63,14 +63,14 @@
                 <a href="{{ route('inventory.issues.create', ['requisition_id' => $requisition->id]) }}" class="inline-flex min-h-11 items-center justify-center rounded-lg bg-green-700 px-4 py-2.5 text-sm font-semibold text-white shadow-sm transition hover:-translate-y-0.5 hover:bg-green-800 hover:shadow focus:outline-none focus:ring-2 focus:ring-green-700 focus:ring-offset-2">{{ __('Registrar salida parcial') }}</a>
             @endif
         </div>
-        @php($visibleOrders = $requisition->purchaseOrders->filter(fn ($order) => Auth::user()->hasPermission('purchases.orders.view') || $order->created_by_user_id === Auth::id() || $order->approved_by_user_id === Auth::id()))
+        @php($visibleOrders = $requisition->purchaseOrders->filter(fn ($order) => Auth::user()->hasPermission('purchases.orders.view') || Auth::user()->hasPermission('purchases.quotes.generate_orders') || Auth::user()->hasPermission('purchases.orders.submit') || Auth::user()->hasPermission('purchases.orders.create_direct') || Auth::user()->hasPermission('purchases.orders.approve') || Auth::user()->hasPermission('purchases.orders.approve_any') || Auth::user()->hasPermission('purchases.orders.reject') || $order->created_by_user_id === Auth::id() || $order->approved_by_user_id === Auth::id()))
         @if ($visibleOrders->isNotEmpty())
             <section class="rounded-lg border border-gray-200 bg-white p-5 shadow-sm">
                 <h2 class="text-lg font-semibold text-gray-900">{{ __('Órdenes de compra generadas') }}</h2>
                 <ul class="mt-3 divide-y divide-gray-200">
                     @foreach ($visibleOrders as $purchaseOrder)
                         <li class="flex flex-wrap items-center justify-between gap-3 py-3">
-                            <span class="text-sm">{{ $purchaseOrder->reference }} · {{ $purchaseOrder->supplier->legal_name }} · {{ $purchaseOrder->status === 'approved' ? __('Aprobada') : __('Borrador') }}</span>
+                            <span class="text-sm">{{ $purchaseOrder->reference }} · {{ $purchaseOrder->supplier->legal_name }} · {{ __('order_status.'.$purchaseOrder->status) }}</span>
                             <a class="text-sm text-indigo-700 underline" href="{{ route('purchasing.orders.show', $purchaseOrder) }}">{{ __('Ver') }}</a>
                         </li>
                     @endforeach

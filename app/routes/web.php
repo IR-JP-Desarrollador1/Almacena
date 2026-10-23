@@ -126,7 +126,7 @@ Route::middleware(['auth', 'active'])->group(function () {
         });
     });
 
-    Route::middleware('permission:purchases.requisitions.view|purchases.requisitions.approve|purchases.requisitions.approve_any|purchases.requisitions.reject|inventory.requisitions.manage|inventory.requisitions.submit|purchases.quotes.view|purchases.quotes.manage|purchases.quotes.award|purchases.quotes.generate_orders|purchases.orders.view|purchases.orders.approve')
+    Route::middleware('permission:purchases.requisitions.view|purchases.requisitions.approve|purchases.requisitions.approve_any|purchases.requisitions.reject|inventory.requisitions.manage|inventory.requisitions.submit|purchases.quotes.view|purchases.quotes.manage|purchases.quotes.award|purchases.quotes.generate_orders|purchases.orders.view|purchases.orders.submit|purchases.orders.create_direct|purchases.orders.approve|purchases.orders.approve_any|purchases.orders.reject')
         ->prefix('purchasing')
         ->name('purchasing.')
         ->group(function () {
@@ -140,7 +140,7 @@ Route::middleware(['auth', 'active'])->group(function () {
                 ->middleware('permission:inventory.requisitions.manage')
                 ->name('requisitions.store');
             Route::get('/requisitions/{requisition}', [RequisitionController::class, 'show'])
-                ->middleware('permission:purchases.requisitions.view|purchases.requisitions.approve|purchases.requisitions.approve_any|purchases.requisitions.reject|inventory.requisitions.manage|inventory.requisitions.submit|purchases.quotes.view|purchases.quotes.manage|purchases.quotes.award|purchases.quotes.generate_orders')
+                ->middleware('permission:purchases.requisitions.view|purchases.requisitions.approve|purchases.requisitions.approve_any|purchases.requisitions.reject|inventory.requisitions.manage|inventory.requisitions.submit|purchases.quotes.view|purchases.quotes.manage|purchases.quotes.award|purchases.quotes.generate_orders|purchases.orders.create_direct')
                 ->name('requisitions.show');
             Route::get('/requisitions/{requisition}/edit', [RequisitionController::class, 'edit'])
                 ->middleware('permission:inventory.requisitions.manage')
@@ -162,11 +162,17 @@ Route::middleware(['auth', 'active'])->group(function () {
                 ->middleware('permission:purchases.quotes.view|purchases.quotes.manage|purchases.quotes.award|purchases.quotes.generate_orders')
                 ->name('quotes.queue');
             Route::get('/orders', [PurchaseOrderController::class, 'index'])
-                ->middleware('permission:purchases.orders.view|purchases.quotes.generate_orders|purchases.orders.approve')
+                ->middleware('permission:purchases.orders.view|purchases.quotes.generate_orders|purchases.orders.submit|purchases.orders.create_direct|purchases.orders.approve|purchases.orders.approve_any|purchases.orders.reject')
                 ->name('orders.index');
             Route::get('/orders/create', [PurchaseOrderController::class, 'create'])
                 ->middleware('permission:purchases.quotes.generate_orders')
                 ->name('orders.create');
+            Route::get('/orders/direct', [PurchaseOrderController::class, 'createDirect'])
+                ->middleware('permission:purchases.orders.create_direct')
+                ->name('orders.direct.create');
+            Route::post('/orders/direct', [PurchaseOrderController::class, 'storeDirect'])
+                ->middleware('permission:purchases.orders.create_direct')
+                ->name('orders.direct.store');
             Route::get('/requisitions/{requisition}/quotes', [QuoteComparisonController::class, 'index'])
                 ->middleware('permission:purchases.quotes.view|purchases.quotes.award|purchases.quotes.generate_orders')
                 ->name('quotes.index');
@@ -183,15 +189,27 @@ Route::middleware(['auth', 'active'])->group(function () {
                 ->middleware('permission:purchases.quotes.generate_orders')
                 ->name('quotes.generate-orders');
             Route::get('/orders/{purchaseOrder}', [PurchaseOrderController::class, 'show'])
-                ->middleware('permission:purchases.orders.view|purchases.quotes.generate_orders|purchases.orders.approve')
+                ->middleware('permission:purchases.orders.view|purchases.quotes.generate_orders|purchases.orders.submit|purchases.orders.create_direct|purchases.orders.approve|purchases.orders.reject')
                 ->name('orders.show');
+            Route::get('/orders/{purchaseOrder}/edit', [PurchaseOrderController::class, 'edit'])
+                ->middleware('permission:purchases.orders.submit')
+                ->name('orders.edit');
+            Route::put('/orders/{purchaseOrder}', [PurchaseOrderController::class, 'update'])
+                ->middleware('permission:purchases.orders.submit')
+                ->name('orders.update');
+            Route::post('/orders/{purchaseOrder}/submit', [PurchaseOrderController::class, 'submit'])
+                ->middleware('permission:purchases.orders.submit')
+                ->name('orders.submit');
             Route::post('/orders/{purchaseOrder}/approve', [PurchaseOrderController::class, 'approve'])
-                ->middleware('permission:purchases.orders.approve')
+                ->middleware('permission:purchases.orders.approve|purchases.orders.approve_any')
                 ->name('orders.approve');
+            Route::post('/orders/{purchaseOrder}/reject', [PurchaseOrderController::class, 'reject'])
+                ->middleware('permission:purchases.orders.reject')
+                ->name('orders.reject');
         });
 
     Route::prefix('inventory')->name('inventory.')
-        ->middleware('permission:inventory.receipts.view|inventory.receipts.create|inventory.issues.view|inventory.issues.create|inventory.requisitions.dispatch|inventory.movements.view|inventory.requisitions.view|inventory.requisitions.manage|inventory.requisitions.submit|purchases.requisitions.view')
+        ->middleware('permission:inventory.receipts.view|inventory.receipts.create|inventory.receipts.direct.create|inventory.issues.view|inventory.issues.create|inventory.issues.direct.create|inventory.requisitions.dispatch|inventory.movements.view|inventory.requisitions.view|inventory.requisitions.manage|inventory.requisitions.submit|purchases.requisitions.view')
         ->group(function () {
             Route::get('/requisitions', [RequisitionController::class, 'inventoryIndex'])
                 ->middleware('permission:inventory.requisitions.view|inventory.requisitions.manage|inventory.requisitions.submit|inventory.requisitions.dispatch|inventory.issues.create')
@@ -228,28 +246,28 @@ Route::middleware(['auth', 'active'])->group(function () {
                 ->middleware('permission:inventory.movements.view')
                 ->name('kardex');
             Route::get('/receipts', [InventoryMovementController::class, 'receipts'])
-                ->middleware('permission:inventory.receipts.view|inventory.receipts.create')
+                ->middleware('permission:inventory.receipts.view|inventory.receipts.create|inventory.receipts.direct.create')
                 ->name('receipts.index');
             Route::get('/receipts/create', [InventoryMovementController::class, 'createReceipt'])
-                ->middleware('permission:inventory.receipts.create')
+                ->middleware('permission:inventory.receipts.create|inventory.receipts.direct.create')
                 ->name('receipts.create');
             Route::get('/receipts/{receipt}', [InventoryMovementController::class, 'showReceipt'])
-                ->middleware('permission:inventory.receipts.view|inventory.receipts.create')
+                ->middleware('permission:inventory.receipts.view|inventory.receipts.create|inventory.receipts.direct.create')
                 ->name('receipts.show');
             Route::post('/receipts', [InventoryMovementController::class, 'storeReceipt'])
-                ->middleware('permission:inventory.receipts.create')
+                ->middleware('permission:inventory.receipts.create|inventory.receipts.direct.create')
                 ->name('receipts.store');
             Route::get('/issues', [InventoryMovementController::class, 'issues'])
-                ->middleware('permission:inventory.issues.view|inventory.issues.create')
+                ->middleware('permission:inventory.issues.view|inventory.issues.create|inventory.issues.direct.create')
                 ->name('issues.index');
             Route::get('/issues/create', [InventoryMovementController::class, 'createIssue'])
-                ->middleware('permission:inventory.issues.create|inventory.requisitions.dispatch')
+                ->middleware('permission:inventory.issues.create|inventory.issues.direct.create|inventory.requisitions.dispatch')
                 ->name('issues.create');
             Route::get('/issues/{issue}', [InventoryMovementController::class, 'showIssue'])
-                ->middleware('permission:inventory.issues.view|inventory.issues.create')
+                ->middleware('permission:inventory.issues.view|inventory.issues.create|inventory.issues.direct.create')
                 ->name('issues.show');
             Route::post('/issues', [InventoryMovementController::class, 'storeIssue'])
-                ->middleware('permission:inventory.issues.create|inventory.requisitions.dispatch')
+                ->middleware('permission:inventory.issues.create|inventory.issues.direct.create|inventory.requisitions.dispatch')
                 ->name('issues.store');
         });
 });

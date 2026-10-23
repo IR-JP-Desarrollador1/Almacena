@@ -14,16 +14,23 @@ class OperationalTranslationsTest extends TestCase
             'inventory/kardex.blade.php',
             'inventory/kardex-pdf.blade.php',
             'inventory/receipts/create.blade.php',
+            'inventory/receipts/create-direct.blade.php',
             'inventory/receipts/index.blade.php',
+            'inventory/receipts/select-source.blade.php',
             'inventory/receipts/show.blade.php',
             'inventory/issues/create.blade.php',
+            'inventory/issues/create-direct.blade.php',
             'inventory/issues/index.blade.php',
+            'inventory/issues/select-source.blade.php',
             'inventory/issues/show.blade.php',
             'purchasing/requisitions/form.blade.php',
             'purchasing/requisitions/index.blade.php',
             'purchasing/requisitions/show.blade.php',
             'purchasing/orders/index.blade.php',
+            'purchasing/orders/direct-source.blade.php',
+            'purchasing/orders/direct-create.blade.php',
             'purchasing/orders/show.blade.php',
+            'purchasing/orders/edit.blade.php',
             'purchasing/quotes/index.blade.php',
             'admin/catalogs/products/import.blade.php',
             'admin/catalogs/supplier-evaluations/index.blade.php',
@@ -35,7 +42,7 @@ class OperationalTranslationsTest extends TestCase
             preg_match_all('/__\(\s*\'((?:\\\\.|[^\'])*)\'/', $contents, $matches);
 
             foreach ($matches[1] as $key) {
-                if ($key !== 'Excel (.xlsx)' && $key !== 'CSV' && $key !== 'PDF' && $key !== 'requisition_status.') {
+                if ($key !== 'Excel (.xlsx)' && $key !== 'CSV' && $key !== 'PDF' && $key !== 'requisition_status.' && $key !== 'receipt_reason.' && $key !== 'issue_reason.' && $key !== 'order_status.') {
                     $translationKeys[$key] = true;
                 }
             }
@@ -55,6 +62,7 @@ class OperationalTranslationsTest extends TestCase
 
             foreach (['draft', 'pending_approval', 'approved', 'rejected'] as $status) {
                 $this->assertArrayHasKey("requisition_status.{$status}", $catalog);
+                $this->assertArrayHasKey("order_status.{$status}", $catalog);
             }
         }
     }
@@ -74,6 +82,10 @@ class OperationalTranslationsTest extends TestCase
 
                 $this->assertSame($receiptLabel, __('Registrar entrada'));
                 $this->assertSame($statusLabel, __('requisition_status.pending_approval'));
+                $this->assertSame(
+                    ['en' => 'Pending approval', 'fr' => 'En attente d’approbation', 'pt_BR' => 'Pendente de aprovação'][$locale],
+                    __('order_status.pending_approval'),
+                );
                 $this->assertSame($warehouseLabel, __('Bodega: :warehouse', ['warehouse' => 'MAIN']));
                 $this->assertSame(
                     $dateFormatHint,

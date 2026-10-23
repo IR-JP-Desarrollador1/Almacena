@@ -10,6 +10,8 @@ class Receipt extends Model
 {
     protected $fillable = [
         'reference',
+        'source_type',
+        'direct_reason',
         'purchase_order_id',
         'warehouse_id',
         'received_by_user_id',

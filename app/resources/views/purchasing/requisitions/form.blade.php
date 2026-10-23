@@ -5,9 +5,16 @@
         'name' => $product->name,
         'unit' => $product->unit->abbreviation,
     ])->values();
-    $initialItems = old('items', $requisition->exists
+    $initialItems = collect(old('items', $requisition->exists
         ? $requisition->items->map(fn ($item) => ['product_id' => (string) $item->product_id, 'quantity' => $item->quantity, 'notes' => $item->notes])->values()->all()
-        : [['product_id' => '', 'quantity' => '', 'notes' => '']]);
+        : [['product_id' => '', 'quantity' => '', 'notes' => '']]))
+        ->map(function ($item) use ($productOptions) {
+            $product = $productOptions->firstWhere('id', (int) ($item['product_id'] ?? 0));
+            $item['search'] = $product ? $product['code'].' — '.$product['name'].' ('.$product['unit'].')' : '';
+
+            return $item;
+        })
+        ->all();
 @endphp
 <x-app-layout>
     <x-slot name="header"><h1 class="text-xl font-semibold text-gray-800">{{ $requisition->exists ? __('Editar requisición').' '.$requisition->reference : __('Nueva requisición') }}</h1></x-slot>
@@ -36,12 +43,25 @@
                 </div>
 
                 <fieldset class="mt-7">
-                    <div class="flex items-center justify-between gap-3"><legend class="text-sm font-medium text-gray-900">{{ __('Productos solicitados') }}</legend><button type="button" @click="if(items.length < 50) items.push({product_id: '', quantity: '', notes: ''})" class="text-sm font-medium text-indigo-700 underline">{{ __('Agregar producto') }}</button></div>
+                    <div class="flex items-center justify-between gap-3"><legend class="text-sm font-medium text-gray-900">{{ __('Productos solicitados') }}</legend><button type="button" @click="if(items.length < 50) items.push({product_id: '', quantity: '', notes: '', search: ''})" class="text-sm font-medium text-indigo-700 underline">{{ __('Agregar producto') }}</button></div>
                     <x-input-error :messages="$errors->get('items')" class="mt-2" />
                     <template x-for="(item, index) in items" :key="index">
                         <div class="mt-4 rounded-md border border-gray-200 p-4">
                             <div class="grid gap-4 md:grid-cols-12">
-                                <div class="md:col-span-6"><x-input-label :value="__('Producto')" /><select x-model="item.product_id" :name="'items[' + index + '][product_id]'" required class="mt-1 block w-full rounded-md border-gray-300 shadow-sm"><option value="">{{ __('Seleccione producto') }}</option><template x-for="product in products" :key="product.id"><option :value="product.id" x-text="product.code + ' — ' + product.name + ' (' + product.unit + ')'"></option></template></select><x-input-error :messages="$errors->get('items.*.product_id')" class="mt-2" /></div>
+                                <div class="md:col-span-6">
+                                    <label :for="'requisition-product-search-' + index" class="block text-sm font-medium text-gray-700">{{ __('Buscar producto') }}</label>
+                                    <div class="relative mt-1" data-product-search-widget>
+                                        <input type="search" x-model="item.search" :id="'requisition-product-search-' + index" :aria-controls="'requisition-product-results-' + index" placeholder="{{ __('Escribe el código o nombre del producto') }}" autocomplete="off" required role="combobox" aria-autocomplete="list" aria-expanded="false" data-product-search-input data-selection-error="{{ __('Selecciona un producto de las coincidencias.') }}" class="block w-full rounded-md border-gray-300 shadow-sm">
+                                        <input type="hidden" x-model="item.product_id" :name="'items[' + index + '][product_id]'" data-product-search-value>
+                                        <ul :id="'requisition-product-results-' + index" role="listbox" hidden class="absolute z-20 mt-1 max-h-60 w-full overflow-auto rounded-md border border-gray-200 bg-white py-1 shadow-lg">
+                                            <template x-for="product in products" :key="product.id">
+                                                <li :id="'requisition-product-option-' + index + '-' + product.id" role="option" aria-selected="false" data-product-search-option :data-product-id="product.id" :data-search-text="product.code + ' ' + product.name + ' ' + product.unit" x-text="product.code + ' — ' + product.name + ' (' + product.unit + ')'" class="cursor-pointer px-3 py-2 text-sm text-gray-700 hover:bg-green-50"></li>
+                                            </template>
+                                            <li role="presentation" data-product-search-no-results hidden class="px-3 py-2 text-sm text-gray-500">{{ __('No hay coincidencias.') }}</li>
+                                        </ul>
+                                    </div>
+                                    <x-input-error :messages="$errors->get('items.*.product_id')" class="mt-2" />
+                                </div>
                                 <div class="md:col-span-2"><x-input-label :value="__('Cantidad')" /><x-text-input type="number" min="0.001" step="0.001" x-model="item.quantity" ::name="'items[' + index + '][quantity]'" required class="mt-1 block w-full" /><x-input-error :messages="$errors->get('items.*.quantity')" class="mt-2" /></div>
                                 <div class="md:col-span-3"><x-input-label :value="__('Nota (opcional)')" /><x-text-input x-model="item.notes" ::name="'items[' + index + '][notes]'" class="mt-1 block w-full" /></div>
                                 <div class="flex items-end md:col-span-1"><button type="button" x-show="items.length > 1" @click="items.splice(index, 1)" class="text-sm text-red-700 underline">{{ __('Quitar') }}</button></div>

@@ -532,6 +532,9 @@ class AdministrationTest extends TestCase
     {
         $role = Role::query()->where('slug', 'administracion')->firstOrFail();
         $this->assertTrue($role->permissions()->where('code', 'purchases.requisitions.approve_any')->exists());
+        $this->assertTrue($role->permissions()->where('code', 'purchases.orders.approve')->exists());
+        $this->assertTrue($role->permissions()->where('code', 'purchases.orders.approve_any')->exists());
+        $this->assertTrue($role->permissions()->where('code', 'purchases.orders.reject')->exists());
 
         $this->actingAs($this->administrator)->put(route('admin.roles.update', $role), [
             'name' => $role->name,
@@ -564,6 +567,10 @@ class AdministrationTest extends TestCase
         $this->assertTrue($purchasing->permissions()->where('code', 'purchases.quotes.manage')->exists());
         $this->assertTrue($purchasing->permissions()->where('code', 'purchases.quotes.award')->exists());
         $this->assertTrue($purchasing->permissions()->where('code', 'purchases.quotes.generate_orders')->exists());
+        $this->assertTrue($purchasing->permissions()->where('code', 'purchases.orders.submit')->exists());
+        $this->assertTrue($purchasing->permissions()->where('code', 'purchases.orders.approve')->exists());
+        $this->assertFalse($purchasing->permissions()->where('code', 'purchases.orders.approve_any')->exists());
+        $this->assertTrue($purchasing->permissions()->where('code', 'purchases.orders.reject')->exists());
         $this->assertFalse(Permission::query()->where('code', 'purchases.requisitions.decide')->exists());
         $this->assertFalse($purchasing->permissions()->where('code', 'inventory.requisitions.manage')->exists());
     }
@@ -621,5 +628,19 @@ class AdministrationTest extends TestCase
         $this->assertFalse($permissions->contains('purchases.orders.create'));
         $this->assertFalse(Permission::query()->where('code', 'purchases.orders.create')->exists());
         $this->assertFalse(Permission::query()->where('code', 'purchases.requisitions.decide')->exists());
+    }
+
+    public function test_access_control_seeder_assigns_order_submission_and_rejection_permissions(): void
+    {
+        $this->seed(AccessControlSeeder::class);
+
+        $purchasing = Role::query()->where('slug', 'compras')->firstOrFail();
+        $this->assertTrue($purchasing->permissions()->where('code', 'purchases.orders.submit')->exists());
+        $this->assertTrue($purchasing->permissions()->where('code', 'purchases.orders.reject')->exists());
+
+        $administrator = Role::query()->where('slug', 'administracion')->firstOrFail();
+        $this->assertTrue($administrator->permissions()->where('code', 'purchases.orders.submit')->exists());
+        $this->assertTrue($administrator->permissions()->where('code', 'purchases.orders.reject')->exists());
+        $this->assertTrue($administrator->permissions()->where('code', 'purchases.orders.approve_any')->exists());
     }
 }

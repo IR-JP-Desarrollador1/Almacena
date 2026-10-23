@@ -10,11 +10,16 @@ class PurchaseOrder extends Model
 {
     public const STATUS_DRAFT = 'draft';
 
+    public const STATUS_PENDING_APPROVAL = 'pending_approval';
+
     public const STATUS_APPROVED = 'approved';
+
+    public const STATUS_REJECTED = 'rejected';
 
     protected $fillable = [
         'reference',
         'requisition_id',
+        'warehouse_id',
         'supplier_quote_id',
         'supplier_id',
         'quote_currency_id',
@@ -22,10 +27,13 @@ class PurchaseOrder extends Model
         'exchange_rate',
         'created_by_user_id',
         'approved_by_user_id',
+        'rejected_by_user_id',
         'quote_reference',
         'quote_date',
         'status',
         'approved_at',
+        'rejection_reason',
+        'rejected_at',
     ];
 
     protected function casts(): array
@@ -36,12 +44,18 @@ class PurchaseOrder extends Model
             'exchange_rate' => 'decimal:8',
             'quote_date' => 'date',
             'approved_at' => 'datetime',
+            'rejected_at' => 'datetime',
         ];
     }
 
     public function requisition(): BelongsTo
     {
         return $this->belongsTo(Requisition::class);
+    }
+
+    public function warehouse(): BelongsTo
+    {
+        return $this->belongsTo(Warehouse::class);
     }
 
     public function supplier(): BelongsTo
@@ -72,6 +86,11 @@ class PurchaseOrder extends Model
     public function approver(): BelongsTo
     {
         return $this->belongsTo(User::class, 'approved_by_user_id');
+    }
+
+    public function rejector(): BelongsTo
+    {
+        return $this->belongsTo(User::class, 'rejected_by_user_id');
     }
 
     public function items(): HasMany
