@@ -41,7 +41,7 @@
                 <path d="M11 16.3v9.2l9 4.8 9-4.8v-9.2M20 21.1v9.2" stroke="#183A33" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" />
             </svg>
         </span>
-        <span>Almacena<span class="brand-period">.</span></span>
+        <span>AlmacenaLite<span class="brand-period">.</span></span>
     </a>
 
     <span class="nav-caption">{{ __('MENÚ PRINCIPAL') }}</span>
@@ -215,7 +215,7 @@
         <div class="connection-card">
             <span class="connection-indicator" aria-hidden="true"></span>
             <div>
-                <strong>Almacena</strong>
+                <strong>AlmacenaLite</strong>
                 <span>{{ __('Gestión centralizada') }}</span>
             </div>
         </div>

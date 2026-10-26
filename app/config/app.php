@@ -13,7 +13,7 @@ return [
     |
     */
 
-    'name' => env('APP_NAME', 'Almacena'),
+    'name' => env('APP_NAME', 'AlmacenaLite'),
 
     /*
     |--------------------------------------------------------------------------

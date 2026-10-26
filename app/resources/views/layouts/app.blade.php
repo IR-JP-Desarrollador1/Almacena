@@ -4,7 +4,7 @@
         <meta charset="utf-8">
         <meta name="viewport" content="width=device-width, initial-scale=1">
         <meta name="csrf-token" content="{{ csrf_token() }}">
-        <title>{{ config('app.name', 'Almacena') }}</title>
+        <title>{{ config('app.name', 'AlmacenaLite') }}</title>
         @vite(['resources/css/app.css', 'resources/js/app.js'])
     </head>
     <body>
@@ -78,7 +78,7 @@
                 request()->routeIs('admin.users.*') => [
                     'section' => 'ADMINISTRACIÓN',
                     'breadcrumb' => 'Usuarios',
-                    'description' => 'Administra las cuentas con acceso a Almacena.',
+                    'description' => 'Administra las cuentas con acceso a AlmacenaLite.',
                 ],
                 request()->routeIs('admin.roles.*') => [
                     'section' => 'ADMINISTRACIÓN',
@@ -148,7 +148,7 @@
                     'description' => 'Actualiza tu información y las opciones de acceso.',
                 ],
                 default => [
-                    'section' => 'ALMACENA',
+                    'section' => 'ALMACENALITE',
                     'breadcrumb' => 'Espacio de trabajo',
                     'description' => '',
                 ],
@@ -166,7 +166,7 @@
                     </div>
                     <span class="local-badge">
                         <span class="status-dot" aria-hidden="true"></span>
-                        {{ config('app.name', 'Almacena') }}
+                        {{ config('app.name', 'AlmacenaLite') }}
                     </span>
                 </header>
 
@@ -177,7 +177,7 @@
                             @isset($header)
                                 <div class="page-heading-slot">{{ $header }}</div>
                             @else
-                                <h1>{{ config('app.name', 'Almacena') }}</h1>
+                                <h1>{{ config('app.name', 'AlmacenaLite') }}</h1>
                             @endisset
                             @if ($pageMeta['description'])
                                 <p>{{ __($pageMeta['description']) }}</p>
