@@ -1,8 +1,8 @@
 import './bootstrap';
 
 const api = window.axios;
-const tokenKey = 'controla.admin.token';
-const accountTypeKey = 'controla.account.type';
+const tokenKey = 'controlaLite.admin.token';
+const accountTypeKey = 'controlaLite.account.type';
 const authView = document.querySelector('#auth-view');
 const workspaceView = document.querySelector('#workspace-view');
 const personView = document.querySelector('#person-view');
@@ -179,7 +179,7 @@ const moduleConfig = {
     },
     attendance_settings: {
         title: 'Parámetros de asistencia',
-        description: 'Configura los intervalos de marcación y las zonas horarias que utiliza Controla.',
+        description: 'Configura los intervalos de marcación y las zonas horarias que utiliza ControlaLite.',
         endpoint: '/api/v1/admin/attendance-settings',
         readPermission: 'attendance_settings.read',
         updatePermission: 'attendance_settings.update',
@@ -1233,7 +1233,7 @@ async function setCurrentModule(moduleName) {
                 group.classList.remove('nav-group-collapsed');
                 toggle.setAttribute('aria-expanded', 'true');
                 toggle.title = `Contraer grupo ${label}`;
-                sessionStorage.setItem(`controla.nav.collapsed.${groupId}`, '0');
+                sessionStorage.setItem(`controlaLite.nav.collapsed.${groupId}`, '0');
             }
         } else {
             link.removeAttribute('aria-current');
@@ -2304,7 +2304,7 @@ async function exportReport(format) {
             responseType: 'blob',
         });
         const extension = format === 'xlsx' ? 'xlsx' : format;
-        const fileName = `controla-${filters.type}-${localDateValue()}.${extension}`;
+        const fileName = `controlaLite-${filters.type}-${localDateValue()}.${extension}`;
         const objectUrl = URL.createObjectURL(response.data);
         const link = document.createElement('a');
         link.href = objectUrl;
@@ -3444,7 +3444,7 @@ document.querySelector('#overtime-review-next').addEventListener('click', () => 
 document.querySelectorAll('[data-nav-toggle]').forEach((button) => {
     const group = button.closest('.nav-group');
     const groupId = button.getAttribute('aria-controls');
-    const storageKey = `controla.nav.collapsed.${groupId}`;
+    const storageKey = `controlaLite.nav.collapsed.${groupId}`;
     const label = button.querySelector('span').textContent.trim();
     const isCollapsed = sessionStorage.getItem(storageKey) === '1';
     group.classList.toggle('nav-group-collapsed', isCollapsed);

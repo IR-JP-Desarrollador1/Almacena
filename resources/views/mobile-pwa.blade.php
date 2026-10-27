@@ -4,20 +4,20 @@
         <meta charset="utf-8">
         <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
         <meta name="theme-color" content="#183a33">
-        <meta name="description" content="Registra tu asistencia en Controla con selfie y ubicación.">
+        <meta name="description" content="Registra tu asistencia en ControlaLite con selfie y ubicación.">
         <meta name="mobile-web-app-capable" content="yes">
         <meta name="apple-mobile-web-app-capable" content="yes">
         <meta name="apple-mobile-web-app-status-bar-style" content="default">
         <link rel="manifest" href="../mobile-pwa.webmanifest">
         <link rel="icon" href="../mobile-pwa-icon.svg" type="image/svg+xml">
         <link rel="apple-touch-icon" href="../mobile-pwa-icon.svg">
-        <title>Controla — Asistencia personal</title>
+        <title>ControlaLite — Asistencia personal</title>
         @vite(['resources/css/app.css', 'resources/js/mobile-pwa.js'])
     </head>
     <body>
         <main class="person-portal mobile-pwa" id="pwa-login-view">
             <section class="person-portal-card mobile-pwa-card">
-                <a class="brand-lockup person-portal-brand" href="./" aria-label="Controla, asistencia personal">
+                <a class="brand-lockup person-portal-brand" href="./" aria-label="ControlaLite, asistencia personal">
                     <span class="brand-mark" aria-hidden="true">
                         <svg viewBox="0 0 40 40" fill="none">
                             <path d="M20 3.5 34 9v9.8c0 8.4-5.7 14.6-14 17.7C11.7 33.4 6 27.2 6 18.8V9l14-5.5Z" fill="currentColor" />
@@ -46,14 +46,14 @@
         <main class="person-portal mobile-pwa" id="pwa-attendance-view" hidden>
             <section class="person-portal-card mobile-pwa-card">
                 <header class="mobile-pwa-header">
-                    <a class="brand-lockup person-portal-brand" href="./" aria-label="Controla, asistencia personal">
+                    <a class="brand-lockup person-portal-brand" href="./" aria-label="ControlaLite, asistencia personal">
                         <span class="brand-mark" aria-hidden="true">
                             <svg viewBox="0 0 40 40" fill="none">
                                 <path d="M20 3.5 34 9v9.8c0 8.4-5.7 14.6-14 17.7C11.7 33.4 6 27.2 6 18.8V9l14-5.5Z" fill="currentColor" />
                                 <path d="m13.7 20.1 4.2 4.2 8.6-9.1" stroke="#183A33" stroke-width="2.8" stroke-linecap="round" stroke-linejoin="round" />
                             </svg>
                         </span>
-                        <span>controla<span class="brand-period">.</span></span>
+                        <span>controlaLite<span class="brand-period">.</span></span>
                     </a>
                     <button class="button button-secondary mobile-pwa-logout" id="pwa-logout-button" type="button">Cerrar sesión</button>
                 </header>
@@ -64,7 +64,7 @@
                     <div class="person-attendance-heading">
                         <span class="eyebrow">DISPOSITIVO MÓVIL</span>
                         <h2 id="pwa-device-title">Este equipo</h2>
-                        <p>Vincula este dispositivo a tu cuenta para que quede registrado en Controla.</p>
+                        <p>Vincula este dispositivo a tu cuenta para que quede registrado en ControlaLite.</p>
                     </div>
                     <button class="button button-secondary button-wide" id="pwa-device-register-button" type="button">Vincular este dispositivo</button>
                     <p class="attendance-message" id="pwa-device-message" role="status" aria-live="polite" hidden></p>

@@ -1,4 +1,4 @@
-const tokenKey = 'controla.person.pwa.token';
+const tokenKey = 'controlaLite.person.pwa.token';
 const loginView = document.querySelector('#pwa-login-view');
 const attendanceView = document.querySelector('#pwa-attendance-view');
 const loginForm = document.querySelector('#pwa-login-form');
@@ -30,7 +30,7 @@ let personSubmitting = false;
 let pendingEvent = null;
 let deferredInstallPrompt = null;
 let authorizedSiteCount = 0;
-const deviceUuidKey = 'controla.person.pwa.device-uuid';
+const deviceUuidKey = 'controlaLite.person.pwa.device-uuid';
 
 function authHeaders() {
     return token ? { Authorization: `Bearer ${token}` } : {};
@@ -698,7 +698,7 @@ window.addEventListener('appinstalled', () => {
 
 if ('serviceWorker' in navigator) {
     navigator.serviceWorker.register('../mobile-pwa-sw.js', { scope: './' })
-        .catch((error) => console.error('No se pudo registrar el service worker de Controla:', error));
+        .catch((error) => console.error('No se pudo registrar el service worker de ControlaLite:', error));
 }
 
 void restoreSession();

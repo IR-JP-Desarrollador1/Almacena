@@ -31,15 +31,15 @@
     </head>
     <body>
         <main class="auth-layout" id="auth-view">
-            <section class="brand-panel" aria-label="Controla">
-                <a class="brand-lockup" href="/" aria-label="Controla, inicio">
+            <section class="brand-panel" aria-label="ControlaLite, control de ingreso">
+                <a class="brand-lockup" href="/" aria-label="ControlaLite, inicio">
                     <span class="brand-mark" aria-hidden="true">
                         <svg viewBox="0 0 40 40" fill="none">
                             <path d="M20 3.5 34 9v9.8c0 8.4-5.7 14.6-14 17.7C11.7 33.4 6 27.2 6 18.8V9l14-5.5Z" fill="currentColor" />
                             <path d="m13.7 20.1 4.2 4.2 8.6-9.1" stroke="#183A33" stroke-width="2.8" stroke-linecap="round" stroke-linejoin="round" />
                         </svg>
                     </span>
-                    <span>controla<span class="brand-period">.</span></span>
+                    <span>controlaLite<span class="brand-period">.</span></span>
                 </a>
 
                 <div class="brand-message">
@@ -65,11 +65,11 @@
                                 <path d="m13.7 20.1 4.2 4.2 8.6-9.1" stroke="#183A33" stroke-width="2.8" stroke-linecap="round" stroke-linejoin="round" />
                             </svg>
                         </span>
-                        <span>controla<span class="brand-period">.</span></span>
+                        <span>controlaLite<span class="brand-period">.</span></span>
                     </div>
                     <span class="eyebrow">ACCESO CENTRALIZADO</span>
                     <h2>Bienvenido de nuevo</h2>
-                    <p class="auth-description">Ingresa con tu cuenta de usuario para administrar Controla. Las personas ingresan desde <a href="/mobile/">/mobile</a>.</p>
+                    <p class="auth-description">Ingresa con tu cuenta de usuario para administrar ControlaLite. Las personas ingresan desde <a href="/mobile/">/mobile</a>.</p>
 
                     <form class="login-form" id="login-form">
                         <label class="field-label" for="email">Correo electrónico</label>
@@ -111,7 +111,7 @@
                     </div>
                 </div>
                 <footer class="auth-footer">
-                    <span>© {{ date('Y') }} Controla</span>
+                    <span>© {{ date('Y') }} ControlaLite</span>
                     <span>Acceso centralizado</span>
                 </footer>
             </section>
@@ -119,18 +119,18 @@
 
         <main class="person-portal" id="person-view" hidden>
             <section class="person-portal-card">
-                <a class="brand-lockup person-portal-brand" href="/" aria-label="Controla, inicio">
+                <a class="brand-lockup person-portal-brand" href="/" aria-label="ControlaLite, inicio">
                     <span class="brand-mark" aria-hidden="true">
                         <svg viewBox="0 0 40 40" fill="none">
                             <path d="M20 3.5 34 9v9.8c0 8.4-5.7 14.6-14 17.7C11.7 33.4 6 27.2 6 18.8V9l14-5.5Z" fill="currentColor" />
                             <path d="m13.7 20.1 4.2 4.2 8.6-9.1" stroke="#183A33" stroke-width="2.8" stroke-linecap="round" stroke-linejoin="round" />
                         </svg>
                     </span>
-                    <span>controla<span class="brand-period">.</span></span>
+                    <span>controlaLite<span class="brand-period">.</span></span>
                 </a>
                 <span class="eyebrow">CUENTA PERSONAL</span>
                 <h1>Bienvenido, <span id="person-name"></span></h1>
-                <p class="auth-description">Has iniciado sesión en tu cuenta de Controla.</p>
+                <p class="auth-description">Has iniciado sesión en tu cuenta de ControlaLite.</p>
                 <dl class="person-profile">
                     <div>
                         <dt>Correo electrónico</dt>
@@ -197,14 +197,14 @@
 
         <main class="workspace" id="workspace-view" hidden>
             <aside class="sidebar">
-                <a class="brand-lockup sidebar-brand" href="/" aria-label="Controla, inicio">
+                <a class="brand-lockup sidebar-brand" href="/" aria-label="ControlaLite, inicio">
                     <span class="brand-mark" aria-hidden="true">
                         <svg viewBox="0 0 40 40" fill="none">
                             <path d="M20 3.5 34 9v9.8c0 8.4-5.7 14.6-14 17.7C11.7 33.4 6 27.2 6 18.8V9l14-5.5Z" fill="currentColor" />
                             <path d="m13.7 20.1 4.2 4.2 8.6-9.1" stroke="#183A33" stroke-width="2.8" stroke-linecap="round" stroke-linejoin="round" />
                         </svg>
                     </span>
-                    <span>controla<span class="brand-period">.</span></span>
+                    <span>controlaLite<span class="brand-period">.</span></span>
                 </a>
 
                 <span class="nav-caption">ESPACIO DE TRABAJO</span>
@@ -399,7 +399,7 @@
 
                     <p class="page-notice" id="dashboard-message" role="status" hidden></p>
                     <footer class="workspace-footer">
-                        <span>Controla <span class="brand-period">·</span> Plataforma de control de ingreso</span>
+                        <span>ControlaLite<span class="brand-period">·</span> Plataforma de control de ingreso</span>
                         <span>Los datos se consultan desde la API central.</span>
                     </footer>
                 </div>
