@@ -358,6 +358,31 @@ class AdministrationTest extends TestCase
         $this->get(route('admin.audit.index'))->assertOk();
     }
 
+    public function test_company_edit_shows_active_currencies_and_its_inactive_base_currency(): void
+    {
+        $cop = Currency::query()->where('code', 'COP')->firstOrFail();
+        $cop->update(['is_active' => false]);
+        Currency::query()->where('code', 'USD')->update(['is_active' => false]);
+
+        Company::create([
+            'tax_id' => '900123456',
+            'legal_name' => 'Empresa con moneda inactiva',
+            'address' => 'Calle 1',
+            'phone' => '123',
+            'country' => 'Colombia',
+            'administrative_division' => 'Cundinamarca',
+            'city' => 'Bogotá',
+            'base_currency_id' => $cop->id,
+        ]);
+
+        $this->actingAs($this->administrator)
+            ->get(route('admin.company.edit'))
+            ->assertOk()
+            ->assertSee('COP — Peso colombiano')
+            ->assertSee('EUR — Euro')
+            ->assertDontSee('USD — Dólar estadounidense');
+    }
+
     public function test_administrator_can_manage_currencies_and_cannot_deactivate_a_currency_in_use(): void
     {
         $this->assertDatabaseHas('currencies', [

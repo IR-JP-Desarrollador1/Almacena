@@ -25,7 +25,7 @@ class CompanyController extends Controller
         return view('admin.company.edit', [
             'company' => $company,
             'currencies' => Currency::query()
-                ->where(fn ($query) => $query->where('is_active', true)->when($company->base_currency_id, fn ($query) => $query->orWhereKey($company->base_currency_id)))
+                ->where(fn ($query) => $query->where('is_active', true)->when($company->base_currency_id, fn ($query) => $query->orWhere('id', $company->base_currency_id)))
                 ->orderBy('code')
                 ->get(),
         ]);
