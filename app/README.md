@@ -42,6 +42,16 @@ El primer usuario se crea mediante el comando interactivo (no hay registro públ
 
 La configuración de correo de ejemplo usa el canal de registro local de Laravel; configura un transporte SMTP para que se entreguen invitaciones y enlaces de recuperación.
 
+## Publicación
+
+Usa `.env.production.example` como plantilla: cópiala a `.env` en el servidor y reemplaza el dominio, las credenciales de MySQL y los datos SMTP por los valores de hPanel. El host de MySQL puede ser distinto de `localhost`. No publiques ni compartas el `.env` real. Genera `APP_KEY` en el servidor con `php artisan key:generate` y conserva esa clave en futuras publicaciones. Mantén `APP_DEBUG=false` y `APP_URL` en HTTPS.
+
+Después de configurar el entorno, aplica las migraciones con `php artisan migrate --force` y prepara la configuración de producción con `php artisan optimize`. Esta plantilla usa colas síncronas (`QUEUE_CONNECTION=sync`), por lo que no requiere un proceso worker en el hosting.
+
+El paquete listo para subir se prepara en `../producción/`: coloca `laravel/` y `public_http/` como carpetas hermanas y configura la raíz pública del dominio para apuntar a `public_http/`. Su `index.php` ya carga Laravel desde `../laravel`. Consulta `../producción/README.md` para los pasos de publicación y permisos. Antes de publicar, completa las credenciales de `.env` con los datos de hPanel.
+
+## Desarrollo
+
 Para desarrollo, abre una terminal para Laravel y otra para Vite:
 
 ```powershell
