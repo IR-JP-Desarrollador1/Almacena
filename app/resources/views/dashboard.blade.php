@@ -80,6 +80,17 @@
                     <span class="dashboard-link-arrow" aria-hidden="true">&rarr;</span>
                 </a>
             @endif
+
+            @if (Auth::user()->hasPermission('database.migrations.manage'))
+                <a class="dashboard-link" href="{{ route('admin.database-update.index') }}">
+                    <span class="dashboard-link-icon" aria-hidden="true">08</span>
+                    <span>
+                        <strong>{{ __('Actualizar base de datos') }}</strong>
+                        <small>{{ __('Consulta y aplica las migraciones pendientes de la aplicación.') }}</small>
+                    </span>
+                    <span class="dashboard-link-arrow" aria-hidden="true">&rarr;</span>
+                </a>
+            @endif
         </section>
     </main>
 </x-app-layout>

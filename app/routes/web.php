@@ -5,6 +5,7 @@ use App\Http\Controllers\Admin\BranchController;
 use App\Http\Controllers\Admin\CompanyController;
 use App\Http\Controllers\Admin\CostCenterController;
 use App\Http\Controllers\Admin\CurrencyController;
+use App\Http\Controllers\Admin\DatabaseUpdateController;
 use App\Http\Controllers\Admin\DepartmentController;
 use App\Http\Controllers\Admin\ProductController;
 use App\Http\Controllers\Admin\RegionalSettingsController;
@@ -15,8 +16,8 @@ use App\Http\Controllers\Admin\SupplierEvaluationController;
 use App\Http\Controllers\Admin\UnitController;
 use App\Http\Controllers\Admin\UserController;
 use App\Http\Controllers\Admin\WarehouseController;
-use App\Http\Controllers\Inventory\InventoryMovementController;
 use App\Http\Controllers\Inventory\InventoryCountController;
+use App\Http\Controllers\Inventory\InventoryMovementController;
 use App\Http\Controllers\ProfileController;
 use App\Http\Controllers\Purchasing\PurchaseOrderController;
 use App\Http\Controllers\Purchasing\QuoteComparisonController;
@@ -65,7 +66,11 @@ Route::middleware(['auth', 'active'])->group(function () {
         Route::put('/company', [CompanyController::class, 'update'])->middleware('permission:companies.manage')->name('company.update');
         Route::get('/regional-settings', [RegionalSettingsController::class, 'edit'])->middleware('permission:companies.manage')->name('regional-settings.edit');
         Route::put('/regional-settings', [RegionalSettingsController::class, 'update'])->middleware('permission:companies.manage')->name('regional-settings.update');
-        Route::get('/audit', [AuditLogController::class, 'index'])->middleware('permission:audit.view')->name('audit.index');
+        Route::get('/audit', [AuditLogController::class, 'index'])->middleware('permission:audit.view|audit.manage')->name('audit.index');
+        Route::delete('/audit/maintenance/range', [AuditLogController::class, 'destroyRange'])->middleware('permission:audit.manage')->name('audit.maintenance.range');
+        Route::delete('/audit/maintenance/expired', [AuditLogController::class, 'destroyExpired'])->middleware('permission:audit.manage')->name('audit.maintenance.expired');
+        Route::get('/database-update', [DatabaseUpdateController::class, 'index'])->middleware('permission:database.migrations.manage')->name('database-update.index');
+        Route::post('/database-update', [DatabaseUpdateController::class, 'run'])->middleware('permission:database.migrations.manage')->name('database-update.run');
 
         Route::middleware('permission:organization.view|organization.manage')->group(function () {
             Route::get('/organization/branches', [BranchController::class, 'index'])->name('organization.branches.index');

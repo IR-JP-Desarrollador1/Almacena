@@ -56,6 +56,9 @@
         @case('audit')
             <path d="M4 3.5h8l4 4v9a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1v-12a1 1 0 0 1 1-1Zm8 0v4h4m-8 3h4m-4 3h4" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" />
             @break
+        @case('database')
+            <ellipse cx="10" cy="4.5" rx="6.5" ry="2.5" stroke="currentColor" stroke-width="1.5" /><path d="M3.5 4.5v11c0 1.4 2.9 2.5 6.5 2.5s6.5-1.1 6.5-2.5v-11m-13 5.5c0 1.4 2.9 2.5 6.5 2.5s6.5-1.1 6.5-2.5m-13 5.5c0 1.4 2.9 2.5 6.5 2.5s6.5-1.1 6.5-2.5" stroke="currentColor" stroke-width="1.5" />
+            @break
         @case('logout')
             <path d="M8 3.5H4.5a1 1 0 0 0-1 1v11a1 1 0 0 0 1 1H8m4-3 4-3.5L12 6.5m4 3.5H8" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" />
             @break

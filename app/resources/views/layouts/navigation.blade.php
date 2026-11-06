@@ -35,7 +35,9 @@
     $canAdministration = $user->hasPermission('users.view')
         || $user->hasPermission('roles.manage')
         || $user->hasPermission('companies.manage')
-        || $user->hasPermission('audit.view');
+        || $user->hasPermission('audit.view')
+        || $user->hasPermission('audit.manage')
+        || $user->hasPermission('database.migrations.manage');
 @endphp
 
 <aside class="sidebar">
@@ -214,7 +216,7 @@
         @endif
 
         @if ($canAdministration)
-            <section class="nav-group" aria-label="{{ __('Administración') }}" x-data="{ open: {{ request()->routeIs('admin.users.*', 'admin.roles.*', 'admin.company.*', 'admin.regional-settings.*', 'admin.audit.*') ? 'true' : 'false' }} }" :class="{ 'nav-group-collapsed': !open }">
+            <section class="nav-group" aria-label="{{ __('Administración') }}" x-data="{ open: {{ request()->routeIs('admin.users.*', 'admin.roles.*', 'admin.company.*', 'admin.regional-settings.*', 'admin.audit.*', 'admin.database-update.*') ? 'true' : 'false' }} }" :class="{ 'nav-group-collapsed': !open }">
                 <button class="nav-group-label" type="button" @click="open = !open" :aria-expanded="open" aria-controls="nav-group-administration">
                     <span>{{ __('ADMINISTRACIÓN') }}</span>
                     <svg viewBox="0 0 16 16" fill="none" aria-hidden="true"><path d="m4 6 4 4 4-4" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" /></svg>
@@ -238,9 +240,14 @@
                             <x-nav-icon name="company" /><span>{{ __('Configuración regional') }}</span>
                         </a>
                     @endif
-                    @if ($user->hasPermission('audit.view'))
+                    @if ($user->hasPermission('audit.view') || $user->hasPermission('audit.manage'))
                         <a class="nav-link {{ request()->routeIs('admin.audit.*') ? 'nav-link-active' : '' }}" href="{{ route('admin.audit.index') }}">
                             <x-nav-icon name="audit" /><span>{{ __('Auditoría') }}</span>
+                        </a>
+                    @endif
+                    @if ($user->hasPermission('database.migrations.manage'))
+                        <a class="nav-link {{ request()->routeIs('admin.database-update.*') ? 'nav-link-active' : '' }}" href="{{ route('admin.database-update.index') }}">
+                            <x-nav-icon name="database" /><span>{{ __('Actualizar base de datos') }}</span>
                         </a>
                     @endif
                 </div>
