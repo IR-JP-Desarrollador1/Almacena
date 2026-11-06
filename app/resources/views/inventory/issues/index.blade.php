@@ -2,9 +2,14 @@
     <x-slot name="header">
         <div class="flex flex-wrap items-center justify-between gap-4">
             <h1 class="text-xl font-semibold text-gray-800">{{ __('Salidas de inventario') }}</h1>
-            @if (Auth::user()->hasPermission('inventory.issues.direct.create') || Auth::user()->hasPermission('inventory.requisitions.dispatch'))
-                <a href="{{ route('inventory.issues.create') }}" class="inline-flex min-h-11 items-center justify-center rounded-lg bg-indigo-600 px-5 py-2.5 text-sm font-semibold text-white shadow-sm transition hover:bg-indigo-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-600 focus-visible:ring-offset-2">{{ __('Registrar salida') }}</a>
-            @endif
+            <div class="flex flex-wrap items-center gap-3">
+                @if (Auth::user()->hasPermission('inventory.issues.direct.create') || Auth::user()->hasPermission('inventory.requisitions.dispatch'))
+                    <a href="{{ route('inventory.issues.create') }}" class="inline-flex min-h-11 items-center justify-center rounded-lg bg-indigo-600 px-5 py-2.5 text-sm font-semibold text-white shadow-sm transition hover:bg-indigo-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-600 focus-visible:ring-offset-2">{{ __('Registrar salida') }}</a>
+                @endif
+                @if (Auth::user()->hasPermission('inventory.transfers.create'))
+                    <a href="{{ route('inventory.transfers.create') }}" class="inline-flex min-h-11 items-center justify-center rounded-lg border border-gray-300 bg-white px-5 py-2.5 text-sm font-semibold text-gray-700 shadow-sm transition hover:bg-gray-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-600 focus-visible:ring-offset-2">{{ __('Registrar traslado') }}</a>
+                @endif
+            </div>
         </div>
     </x-slot>
     <main class="mx-auto max-w-7xl space-y-5 px-4 py-8 sm:px-6 lg:px-8 movement-list-page">

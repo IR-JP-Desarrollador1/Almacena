@@ -12,12 +12,15 @@ class InventoryIssue extends Model
 
     public const SOURCE_DIRECT = 'direct';
 
+    public const SOURCE_TRANSFER = 'transfer';
+
     protected $fillable = [
         'reference',
         'source_type',
         'direct_reason',
         'requisition_id',
         'warehouse_id',
+        'destination_warehouse_id',
         'issued_by_user_id',
         'document_reference',
         'issued_at',
@@ -36,6 +39,11 @@ class InventoryIssue extends Model
     public function warehouse(): BelongsTo
     {
         return $this->belongsTo(Warehouse::class);
+    }
+
+    public function destinationWarehouse(): BelongsTo
+    {
+        return $this->belongsTo(Warehouse::class, 'destination_warehouse_id');
     }
 
     public function issuer(): BelongsTo

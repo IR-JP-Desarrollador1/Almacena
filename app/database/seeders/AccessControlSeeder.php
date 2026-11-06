@@ -38,6 +38,7 @@ class AccessControlSeeder extends Seeder
                 ['name' => 'Generar órdenes desde cotizaciones', 'code' => 'purchases.quotes.generate_orders', 'module' => 'compras', 'description' => 'Generar órdenes de compra borrador a partir de ofertas adjudicadas.'],
                 ['name' => 'Crear órdenes de compra directas', 'code' => 'purchases.orders.create_direct', 'module' => 'compras', 'description' => 'Crear órdenes sin cotización desde requisiciones aprobadas o sin requisición.'],
                 ['name' => 'Consultar órdenes de compra', 'code' => 'purchases.orders.view', 'module' => 'compras'],
+                ['name' => 'Consultar reportes de compras', 'code' => 'reports.purchases.view', 'module' => 'compras'],
                 ['name' => 'Enviar órdenes de compra a aprobación', 'code' => 'purchases.orders.submit', 'module' => 'compras', 'description' => 'Enviar órdenes propias para revisión independiente.'],
                 ['name' => 'Aprobar órdenes de compra', 'code' => 'purchases.orders.approve', 'module' => 'compras'],
                 ['name' => 'Aprobar cualquier orden de compra (Administración)', 'code' => 'purchases.orders.approve_any', 'module' => 'compras', 'description' => 'Permite al perfil Administración aprobar órdenes pendientes incluso si fueron creadas por el mismo usuario.'],
@@ -48,7 +49,13 @@ class AccessControlSeeder extends Seeder
                 ['name' => 'Consultar salidas de inventario', 'code' => 'inventory.issues.view', 'module' => 'inventario'],
                 ['name' => 'Registrar salidas de inventario', 'code' => 'inventory.issues.create', 'module' => 'inventario'],
                 ['name' => 'Registrar salidas directas de inventario', 'code' => 'inventory.issues.direct.create', 'module' => 'inventario', 'description' => 'Registrar salidas directas autorizadas con motivo y referencia documental opcional.'],
+                ['name' => 'Crear traslados entre bodegas', 'code' => 'inventory.transfers.create', 'module' => 'inventario', 'description' => 'Mover existencias entre bodegas autorizadas, con validación de disponibilidad y destino.'],
+                ['name' => 'Consultar traslados entre bodegas', 'code' => 'inventory.transfers.view', 'module' => 'inventario'],
+                ['name' => 'Consultar conteos de inventario', 'code' => 'inventory.counts.view', 'module' => 'inventario'],
+                ['name' => 'Crear y enviar conteos de inventario', 'code' => 'inventory.counts.create', 'module' => 'inventario'],
+                ['name' => 'Aprobar ajustes de conteos de inventario', 'code' => 'inventory.counts.approve', 'module' => 'inventario'],
                 ['name' => 'Consultar kardex de inventario', 'code' => 'inventory.movements.view', 'module' => 'inventario'],
+                ['name' => 'Consultar reportes de inventario', 'code' => 'reports.inventory.view', 'module' => 'inventario'],
             ];
 
             foreach ($permissions as $attributes) {
@@ -112,6 +119,7 @@ class AccessControlSeeder extends Seeder
                     'purchases.orders.submit',
                     'purchases.orders.approve',
                     'purchases.orders.reject',
+                    'reports.purchases.view',
                 ])->pluck('id'),
             );
 
@@ -126,7 +134,12 @@ class AccessControlSeeder extends Seeder
                     'inventory.issues.view',
                     'inventory.issues.create',
                     'inventory.issues.direct.create',
+                    'inventory.transfers.create',
+                    'inventory.transfers.view',
+                    'inventory.counts.view',
+                    'inventory.counts.create',
                     'inventory.movements.view',
+                    'reports.inventory.view',
                 ])->pluck('id'),
             );
 
@@ -134,6 +147,8 @@ class AccessControlSeeder extends Seeder
             $auditor->permissions()->syncWithoutDetaching(
                 Permission::query()->whereIn('code', [
                     'inventory.movements.view',
+                    'reports.inventory.view',
+                    'reports.purchases.view',
                 ])->pluck('id'),
             );
 

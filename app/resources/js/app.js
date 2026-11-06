@@ -15,7 +15,10 @@ if (adminFormDialog && adminFormContent && adminFormTitle) {
     const formHtmlCacheTtl = 30_000;
     let activeFormRequest = 0;
 
-    const isAdminCreateOrEditPath = (pathname) => /^\/admin\/.+\/(?:create|[^/]+\/edit)$/.test(pathname);
+    const isAdminCreateOrEditPath = (pathname) => (
+        /^\/admin\/.+\/(?:create|[^/]+\/edit)$/.test(pathname)
+        || /^\/inventory\/counts\/(?:create|[^/]+\/edit)$/.test(pathname)
+    );
 
     const fetchAdminFormHtml = (url) => {
         const cached = formHtmlCache.get(url);
@@ -87,7 +90,8 @@ if (adminFormDialog && adminFormContent && adminFormTitle) {
             throw new Error('No se pudo cargar el formulario. Intenta nuevamente.');
         }
 
-        adminFormTitle.textContent = responseDocument.querySelector('.page-heading-slot h1, main h1')?.textContent.trim()
+        adminFormTitle.textContent = form.dataset.adminFormTitle
+            || responseDocument.querySelector('.page-heading-slot h1, main h1')?.textContent.trim()
             || 'Formulario';
         form.classList.add('admin-modal-form');
         adminFormContent.replaceChildren(form);
@@ -142,6 +146,41 @@ if (adminFormDialog && adminFormContent && adminFormTitle) {
             }
         }
     });
+
+    document.addEventListener('click', (event) => {
+        const addButton = event.target.closest('#add-count-item');
+        if (addButton) {
+            const form = addButton.closest('form');
+            const container = form.querySelector('#count-items');
+            const itemTemplate = form.querySelector('[data-count-item-template]');
+            const indexes = Array.from(container.querySelectorAll('[data-count-item-index]'), (row) => (
+                Number(row.dataset.countItemIndex)
+            ));
+            const index = Math.max(-1, ...indexes) + 1;
+            const template = document.createElement('template');
+            template.innerHTML = itemTemplate.innerHTML.replaceAll('__INDEX__', String(index));
+            container.append(template.content.cloneNode(true));
+            container.lastElementChild.querySelector('[data-product-search-input]').focus();
+            updateCountItemRemoveButtons(container);
+            return;
+        }
+
+        const removeButton = event.target.closest('.remove-count-item');
+        if (removeButton) {
+            const container = removeButton.closest('#count-items');
+            removeButton.closest('.count-item').remove();
+            updateCountItemRemoveButtons(container);
+        }
+    });
+
+    document.querySelectorAll('#count-items').forEach(updateCountItemRemoveButtons);
+
+    function updateCountItemRemoveButtons(container) {
+        const rows = container.querySelectorAll('.count-item');
+        rows.forEach((row) => {
+            row.querySelector('.remove-count-item').hidden = rows.length <= 1;
+        });
+    }
 
     adminFormDialog.addEventListener('click', (event) => {
         if (event.target.closest('[data-admin-form-close]')) {

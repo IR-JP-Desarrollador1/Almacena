@@ -21,11 +21,17 @@
         || $user->hasPermission('inventory.issues.view')
         || $user->hasPermission('inventory.issues.create')
         || $user->hasPermission('inventory.issues.direct.create')
+        || $user->hasPermission('inventory.transfers.create')
+        || $user->hasPermission('inventory.transfers.view')
+        || $user->hasPermission('inventory.counts.view')
+        || $user->hasPermission('inventory.counts.create')
+        || $user->hasPermission('inventory.counts.approve')
         || $user->hasPermission('inventory.requisitions.dispatch')
         || $user->hasPermission('inventory.movements.view')
         || $user->hasPermission('inventory.requisitions.view')
         || $user->hasPermission('inventory.requisitions.manage')
         || $user->hasPermission('inventory.requisitions.submit');
+    $canReports = $user->hasPermission('reports.inventory.view') || $user->hasPermission('reports.purchases.view');
     $canAdministration = $user->hasPermission('users.view')
         || $user->hasPermission('roles.manage')
         || $user->hasPermission('companies.manage')
@@ -82,6 +88,27 @@
             </section>
         @endif
 
+        @if ($canReports)
+            <section class="nav-group" aria-label="{{ __('Reportes') }}" x-data="{ open: {{ request()->routeIs('reports.*') ? 'true' : 'false' }} }" :class="{ 'nav-group-collapsed': !open }">
+                <button class="nav-group-label" type="button" @click="open = !open" :aria-expanded="open" aria-controls="nav-group-reports">
+                    <span>{{ __('REPORTES') }}</span>
+                    <svg viewBox="0 0 16 16" fill="none" aria-hidden="true"><path d="m4 6 4 4 4-4" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" /></svg>
+                </button>
+                <div class="nav-group-items" id="nav-group-reports">
+                    @if ($user->hasPermission('reports.inventory.view'))
+                        <a class="nav-link {{ request()->routeIs('reports.inventory') ? 'nav-link-active' : '' }}" href="{{ route('reports.inventory') }}">
+                            <x-nav-icon name="receipt" /><span>{{ __('Inventario') }}</span>
+                        </a>
+                    @endif
+                    @if ($user->hasPermission('reports.purchases.view'))
+                        <a class="nav-link {{ request()->routeIs('reports.purchasing') ? 'nav-link-active' : '' }}" href="{{ route('reports.purchasing') }}">
+                            <x-nav-icon name="purchases" /><span>{{ __('Compras') }}</span>
+                        </a>
+                    @endif
+                </div>
+            </section>
+        @endif
+
         @if ($canInventory)
             <section class="nav-group" aria-label="{{ __('Inventario') }}" x-data="{ open: {{ request()->routeIs('inventory.*') ? 'true' : 'false' }} }" :class="{ 'nav-group-collapsed': !open }">
                 <button class="nav-group-label" type="button" @click="open = !open" :aria-expanded="open" aria-controls="nav-group-inventory">
@@ -107,6 +134,16 @@
                     @if ($user->hasPermission('inventory.issues.view') || $user->hasPermission('inventory.issues.create') || $user->hasPermission('inventory.issues.direct.create'))
                         <a class="nav-link {{ request()->routeIs('inventory.issues.*') ? 'nav-link-active' : '' }}" href="{{ route('inventory.issues.index') }}">
                             <x-nav-icon name="issue" /><span>{{ __('Salidas') }}</span>
+                        </a>
+                    @endif
+                    @if ($user->hasPermission('inventory.transfers.create') || $user->hasPermission('inventory.transfers.view'))
+                        <a class="nav-link {{ request()->routeIs('inventory.transfers.*') ? 'nav-link-active' : '' }}" href="{{ route('inventory.transfers.create') }}">
+                            <x-nav-icon name="warehouse" /><span>{{ __('Traslados') }}</span>
+                        </a>
+                    @endif
+                    @if ($user->hasPermission('inventory.counts.view') || $user->hasPermission('inventory.counts.create') || $user->hasPermission('inventory.counts.approve'))
+                        <a class="nav-link {{ request()->routeIs('inventory.counts.*') ? 'nav-link-active' : '' }}" href="{{ route('inventory.counts.index') }}">
+                            <x-nav-icon name="issue" /><span>{{ __('Conteos y ajustes') }}</span>
                         </a>
                     @endif
                 </div>

@@ -16,10 +16,12 @@ use App\Http\Controllers\Admin\UnitController;
 use App\Http\Controllers\Admin\UserController;
 use App\Http\Controllers\Admin\WarehouseController;
 use App\Http\Controllers\Inventory\InventoryMovementController;
+use App\Http\Controllers\Inventory\InventoryCountController;
 use App\Http\Controllers\ProfileController;
 use App\Http\Controllers\Purchasing\PurchaseOrderController;
 use App\Http\Controllers\Purchasing\QuoteComparisonController;
 use App\Http\Controllers\Purchasing\RequisitionController;
+use App\Http\Controllers\Reports\ReportController;
 use Illuminate\Support\Facades\Route;
 
 Route::get('/', function () {
@@ -35,6 +37,15 @@ Route::get('/dashboard', function () {
 Route::middleware(['auth', 'active'])->group(function () {
     Route::get('/profile', [ProfileController::class, 'edit'])->name('profile.edit');
     Route::patch('/profile', [ProfileController::class, 'update'])->name('profile.update');
+
+    Route::prefix('reports')->name('reports.')->group(function () {
+        Route::get('/inventory', [ReportController::class, 'inventory'])
+            ->middleware('permission:reports.inventory.view')
+            ->name('inventory');
+        Route::get('/purchasing', [ReportController::class, 'purchasing'])
+            ->middleware('permission:reports.purchases.view')
+            ->name('purchasing');
+    });
 
     Route::prefix('admin')->name('admin.')->group(function () {
         Route::get('/users', [UserController::class, 'index'])->middleware('permission:users.view')->name('users.index');
@@ -209,8 +220,36 @@ Route::middleware(['auth', 'active'])->group(function () {
         });
 
     Route::prefix('inventory')->name('inventory.')
-        ->middleware('permission:inventory.receipts.view|inventory.receipts.create|inventory.receipts.direct.create|inventory.issues.view|inventory.issues.create|inventory.issues.direct.create|inventory.requisitions.dispatch|inventory.movements.view|inventory.requisitions.view|inventory.requisitions.manage|inventory.requisitions.submit|purchases.requisitions.view')
+        ->middleware('permission:inventory.receipts.view|inventory.receipts.create|inventory.receipts.direct.create|inventory.issues.view|inventory.issues.create|inventory.issues.direct.create|inventory.transfers.create|inventory.transfers.view|inventory.counts.view|inventory.counts.create|inventory.counts.approve|inventory.requisitions.dispatch|inventory.movements.view|inventory.requisitions.view|inventory.requisitions.manage|inventory.requisitions.submit|purchases.requisitions.view')
         ->group(function () {
+            Route::get('/counts', [InventoryCountController::class, 'index'])
+                ->middleware('permission:inventory.counts.view|inventory.counts.create|inventory.counts.approve')
+                ->name('counts.index');
+            Route::get('/counts/create', [InventoryCountController::class, 'create'])
+                ->middleware('permission:inventory.counts.create')
+                ->name('counts.create');
+            Route::post('/counts', [InventoryCountController::class, 'store'])
+                ->middleware('permission:inventory.counts.create')
+                ->name('counts.store');
+            Route::get('/counts/{count}/edit', [InventoryCountController::class, 'edit'])
+                ->middleware('permission:inventory.counts.create')
+                ->name('counts.edit');
+            Route::put('/counts/{count}', [InventoryCountController::class, 'update'])
+                ->middleware('permission:inventory.counts.create')
+                ->name('counts.update');
+            Route::get('/counts/{count}', [InventoryCountController::class, 'show'])
+                ->middleware('permission:inventory.counts.view|inventory.counts.create|inventory.counts.approve')
+                ->name('counts.show');
+            Route::post('/counts/{count}/submit', [InventoryCountController::class, 'submit'])
+                ->middleware('permission:inventory.counts.create')
+                ->name('counts.submit');
+            Route::post('/counts/{count}/approve', [InventoryCountController::class, 'approve'])
+                ->middleware('permission:inventory.counts.approve')
+                ->name('counts.approve');
+            Route::post('/counts/{count}/return', [InventoryCountController::class, 'returnToDraft'])
+                ->middleware('permission:inventory.counts.approve')
+                ->name('counts.return');
+
             Route::get('/requisitions', [RequisitionController::class, 'inventoryIndex'])
                 ->middleware('permission:inventory.requisitions.view|inventory.requisitions.manage|inventory.requisitions.submit|inventory.requisitions.dispatch|inventory.issues.create')
                 ->name('requisitions.index');
@@ -269,6 +308,13 @@ Route::middleware(['auth', 'active'])->group(function () {
             Route::post('/issues', [InventoryMovementController::class, 'storeIssue'])
                 ->middleware('permission:inventory.issues.create|inventory.issues.direct.create|inventory.requisitions.dispatch')
                 ->name('issues.store');
+
+            Route::get('/transfers/create', [InventoryMovementController::class, 'createTransfer'])
+                ->middleware('permission:inventory.transfers.create')
+                ->name('transfers.create');
+            Route::post('/transfers', [InventoryMovementController::class, 'storeTransfer'])
+                ->middleware('permission:inventory.transfers.create')
+                ->name('transfers.store');
         });
 });
 

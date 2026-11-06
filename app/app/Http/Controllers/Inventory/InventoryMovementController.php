@@ -17,6 +17,7 @@ use App\Models\Requisition;
 use App\Models\RequisitionItem;
 use App\Models\StockMovement;
 use App\Models\WarehouseLot;
+use App\Support\DecimalMath;
 use App\Support\RegionalFormatter;
 use Barryvdh\DomPDF\Facade\Pdf;
 use Illuminate\Database\Eloquent\Builder;
@@ -47,6 +48,9 @@ class InventoryMovementController extends Controller
             ->paginate(100)
             ->withQueryString();
         $this->addPageRunningBalances($movements, $scope);
+        foreach ($movements as $movement) {
+            $movement->setAttribute('total_cost_base', $this->movementTotalCost($movement));
+        }
 
         return view('inventory.kardex', [
             'warehouses' => $warehouseQuery->get(),
@@ -75,12 +79,14 @@ class InventoryMovementController extends Controller
                 fputcsv($output, $this->kardexHeadings());
                 foreach ($this->kardexRows($query, $scope, $filters, $regional) as $row) {
                     fputcsv($output, array_map(
-                        fn ($value, $index) => in_array($index, [8, 9, 10], true)
-                            ? $regional->number($value, $index === 10 ? 4 : 3)
-                            : (! in_array($index, [8, 9, 10], true)
+                        fn ($value, $index) => in_array($index, [8, 9], true)
+                            ? $regional->number($value, 0)
+                            : (in_array($index, [10, 11], true)
+                            ? $regional->number($value, 2)
+                            : (! in_array($index, [8, 9, 10, 11], true)
                             && preg_match('/^[\t\r=+\-@]/u', (string) $value)
                             ? "'".$value
-                            : $value),
+                            : $value)),
                         $row,
                         array_keys($row),
                     ));
@@ -105,32 +111,32 @@ class InventoryMovementController extends Controller
         $sheet = $spreadsheet->getActiveSheet();
         $sheet->setTitle('Kardex');
         $sheet->fromArray($this->kardexHeadings(), null, 'A1');
-        $sheet->getStyle('A1:M1')->applyFromArray([
+        $sheet->getStyle('A1:N1')->applyFromArray([
             'font' => ['bold' => true, 'color' => ['rgb' => 'FFFFFF']],
             'fill' => ['fillType' => Fill::FILL_SOLID, 'startColor' => ['rgb' => '166534']],
         ]);
         $sheet->freezePane('A2');
-        $sheet->setAutoFilter('A1:M1');
+        $sheet->setAutoFilter('A1:N1');
         foreach ($rows as $index => $row) {
             $rowNumber = $index + 2;
             foreach ($row as $columnIndex => $value) {
                 $column = Coordinate::stringFromColumnIndex($columnIndex + 1);
                 $cell = $sheet->getCell("{$column}{$rowNumber}");
-                if (in_array($columnIndex, [8, 9, 10], true)) {
+                if (in_array($columnIndex, [8, 9, 10, 11], true)) {
                     $cell->setValueExplicit((float) $value, DataType::TYPE_NUMERIC);
                 } else {
                     $cell->setValueExplicit((string) $value, DataType::TYPE_STRING);
                 }
             }
         }
-        foreach (range('A', 'M') as $column) {
+        foreach (range('A', 'N') as $column) {
             $sheet->getColumnDimension($column)->setAutoSize(true);
         }
         $writer = new Xlsx($spreadsheet);
         $lastRow = count($rows) + 1;
         if ($lastRow > 1) {
-            $sheet->getStyle("I2:J{$lastRow}")->getNumberFormat()->setFormatCode('#,##0.000');
-            $sheet->getStyle("K2:K{$lastRow}")->getNumberFormat()->setFormatCode('#,##0.0000');
+            $sheet->getStyle("I2:J{$lastRow}")->getNumberFormat()->setFormatCode('#,##0');
+            $sheet->getStyle("K2:L{$lastRow}")->getNumberFormat()->setFormatCode('#,##0.00');
         }
 
         return response()->streamDownload(function () use ($writer, $spreadsheet) {
@@ -168,7 +174,7 @@ class InventoryMovementController extends Controller
         }
 
         $query = (clone $scope)
-            ->with(['warehouse.branch', 'product', 'lot.baseCurrency', 'user', 'receipt', 'inventoryIssue'])
+            ->with(['warehouse.branch', 'product', 'lot.baseCurrency', 'user', 'receipt', 'inventoryIssue', 'inventoryCount'])
             ->when(isset($filters['from_date']), fn (Builder $movements) => $movements->whereDate('occurred_at', '>=', $filters['from_date']))
             ->when(isset($filters['to_date']), fn (Builder $movements) => $movements->whereDate('occurred_at', '<=', $filters['to_date']));
         $productsQuery = Product::query()
@@ -224,9 +230,19 @@ class InventoryMovementController extends Controller
             __('Cantidad'),
             __('Saldo'),
             __('Costo unitario base'),
+            __('Costo total'),
             __('Moneda base'),
             __('Registrado por'),
         ];
+    }
+
+    private function movementTotalCost(StockMovement $movement): string
+    {
+        $total = DecimalMath::multiply((string) $movement->quantity, 3, (string) $movement->unit_cost_base, 4, 2);
+
+        return $movement->movement_type === StockMovement::TYPE_ISSUE && DecimalMath::compare($total, '0', 2) > 0
+            ? '-'.$total
+            : $total;
     }
 
     private function kardexRows(Builder $query, Builder $scope, array $filters, RegionalFormatter $regional): \Generator
@@ -251,9 +267,13 @@ class InventoryMovementController extends Controller
             $quantity = (float) $movement->quantity;
             $signedQuantity = $movement->movement_type === StockMovement::TYPE_RECEIPT ? $quantity : -$quantity;
             $balances[$key] = ($balances[$key] ?? 0) + $signedQuantity;
-            $documentReference = $movement->movement_type === StockMovement::TYPE_RECEIPT
-                ? $movement->receipt?->reference
-                : $movement->inventoryIssue?->reference;
+            $documentReference = match ($movement->reference_type) {
+                'inventory_count' => $movement->inventoryCount?->reference,
+                'inventory_transfer' => $movement->inventoryIssue?->reference,
+                default => $movement->movement_type === StockMovement::TYPE_RECEIPT
+                    ? $movement->receipt?->reference
+                    : $movement->inventoryIssue?->reference,
+            };
 
             yield [
                 $movement->warehouse->branch->name,
@@ -267,10 +287,172 @@ class InventoryMovementController extends Controller
                 $signedQuantity,
                 $balances[$key],
                 (float) $movement->unit_cost_base,
+                $this->movementTotalCost($movement),
                 $movement->lot->baseCurrency->code,
                 $movement->user->name.' '.$movement->user->last_name,
             ];
         }
+    }
+
+    public function createTransfer(Request $request): View
+    {
+        abort_unless($request->user()->hasPermission('inventory.transfers.create'), 403);
+
+        return view('inventory.transfers.create', [
+            'warehouses' => $request->user()->accessibleWarehouses()->orderBy('name')->get(),
+            'products' => Product::query()
+                ->where('is_active', true)
+                ->with('unit')
+                ->orderBy('code')
+                ->get(),
+        ]);
+    }
+
+    public function storeTransfer(Request $request): RedirectResponse
+    {
+        abort_unless($request->user()->hasPermission('inventory.transfers.create'), 403);
+
+        $validated = $request->validate([
+            'origin_warehouse_id' => ['required', 'integer', 'exists:warehouses,id'],
+            'destination_warehouse_id' => ['required', 'integer', 'exists:warehouses,id', 'different:origin_warehouse_id'],
+            'document_reference' => ['nullable', 'string', 'max:100'],
+            'items' => ['required', 'array', 'min:1', 'max:100'],
+            'items.*.product_id' => ['required', 'integer', 'distinct', 'exists:products,id'],
+            'items.*.quantity' => ['required', 'numeric', 'decimal:0,3', 'gt:0', 'max:999999999.999'],
+        ]);
+
+        $companyId = $this->company()->id;
+        $user = $request->user();
+
+        $issue = DB::transaction(function () use ($request, $validated, $companyId, $user) {
+            $originWarehouse = $user->accessibleWarehouses()
+                ->whereKey($validated['origin_warehouse_id'])
+                ->whereHas('branch', fn (Builder $branches) => $branches->where('company_id', $companyId))
+                ->firstOrFail();
+            $destinationWarehouse = $user->accessibleWarehouses()
+                ->whereKey($validated['destination_warehouse_id'])
+                ->whereHas('branch', fn (Builder $branches) => $branches->where('company_id', $companyId))
+                ->firstOrFail();
+            abort_unless($user->canTransferBetweenWarehouses($originWarehouse->id, $destinationWarehouse->id), 403);
+
+            $requestedItems = collect($validated['items']);
+            $products = Product::query()
+                ->whereIn('id', $requestedItems->pluck('product_id'))
+                ->where('is_active', true)
+                ->with('unit')
+                ->lockForUpdate()
+                ->get()
+                ->keyBy('id');
+
+            if ($products->count() !== $requestedItems->count()) {
+                throw ValidationException::withMessages([
+                    'items' => __('Selecciona únicamente productos activos del catálogo.'),
+                ]);
+            }
+
+            $allocationPlans = [];
+            foreach ($requestedItems as $index => $item) {
+                $product = $products[(int) $item['product_id']];
+                $allocationPlans[$product->id] = $this->planLotAllocations(
+                    $originWarehouse->id,
+                    $product,
+                    $this->quantityMilli($item['quantity']),
+                    $index,
+                );
+            }
+
+            $issuedAt = now();
+            $issue = InventoryIssue::query()->create([
+                'reference' => 'TMP-'.Str::random(24),
+                'source_type' => InventoryIssue::SOURCE_TRANSFER,
+                'requisition_id' => null,
+                'warehouse_id' => $originWarehouse->id,
+                'destination_warehouse_id' => $destinationWarehouse->id,
+                'issued_by_user_id' => $user->id,
+                'document_reference' => $validated['document_reference'] ?? null,
+                'issued_at' => $issuedAt,
+            ]);
+            $issue->update(['reference' => 'TRA-'.str_pad((string) $issue->id, 8, '0', STR_PAD_LEFT)]);
+
+            foreach ($requestedItems as $item) {
+                $product = $products[(int) $item['product_id']];
+                $transferItem = InventoryIssueItem::query()->create([
+                    'inventory_issue_id' => $issue->id,
+                    'requisition_item_id' => null,
+                    'product_id' => $product->id,
+                    'product_code' => $product->code,
+                    'product_name' => $product->name,
+                    'unit_abbreviation' => $product->unit->abbreviation,
+                    'quantity' => $item['quantity'],
+                ]);
+
+                $plannedAllocations = $allocationPlans[$product->id];
+                foreach ($plannedAllocations as $allocation) {
+                    InventoryIssueAllocation::query()->create([
+                        'inventory_issue_item_id' => $transferItem->id,
+                        'warehouse_lot_id' => $allocation['lot']->id,
+                        'quantity' => $this->quantityString($allocation['quantity_milli']),
+                        'unit_cost' => $allocation['lot']->unit_cost,
+                        'unit_cost_base' => $allocation['lot']->unit_cost_base,
+                    ]);
+                    StockMovement::query()->create([
+                        'warehouse_lot_id' => $allocation['lot']->id,
+                        'warehouse_id' => $originWarehouse->id,
+                        'product_id' => $product->id,
+                        'user_id' => $user->id,
+                        'movement_type' => StockMovement::TYPE_ISSUE,
+                        'reference_type' => 'inventory_transfer',
+                        'reference_id' => $issue->id,
+                        'quantity' => $this->quantityString($allocation['quantity_milli']),
+                        'unit_cost_base' => $allocation['lot']->unit_cost_base,
+                        'base_currency_id' => $allocation['lot']->base_currency_id,
+                        'occurred_at' => $issuedAt,
+                    ]);
+                }
+
+                $transferTotalCostBase = collect($plannedAllocations)->sum(
+                    fn (array $allocation) => (float) $allocation['lot']->unit_cost_base * ($allocation['quantity_milli'] / 1000),
+                );
+                $transferUnitCost = $transferTotalCostBase / ((float) $item['quantity']);
+                $destinationLot = WarehouseLot::query()->create([
+                    'warehouse_id' => $destinationWarehouse->id,
+                    'product_id' => $product->id,
+                    'receipt_item_id' => null,
+                    'lot_code' => 'TRA-'.str_pad((string) $issue->id, 8, '0', STR_PAD_LEFT).'-'.str_pad((string) $transferItem->id, 4, '0', STR_PAD_LEFT),
+                    'quantity_received' => $item['quantity'],
+                    'unit_cost' => number_format((float) $transferUnitCost, 4, '.', ''),
+                    'unit_cost_base' => number_format((float) $transferUnitCost, 4, '.', ''),
+                    'quote_currency_id' => $this->company()->base_currency_id,
+                    'base_currency_id' => $this->company()->base_currency_id,
+                    'exchange_rate' => '1.00000000',
+                    'expires_on' => collect($plannedAllocations)->min(fn (array $allocation) => $allocation['lot']->expires_on?->toDateString() ?? null),
+                    'received_at' => $issuedAt,
+                ]);
+                StockMovement::query()->create([
+                    'warehouse_lot_id' => $destinationLot->id,
+                    'warehouse_id' => $destinationWarehouse->id,
+                    'product_id' => $product->id,
+                    'user_id' => $user->id,
+                    'movement_type' => StockMovement::TYPE_RECEIPT,
+                    'reference_type' => 'inventory_transfer',
+                    'reference_id' => $issue->id,
+                    'quantity' => $item['quantity'],
+                    'unit_cost_base' => $destinationLot->unit_cost_base,
+                    'base_currency_id' => $destinationLot->base_currency_id,
+                    'occurred_at' => $issuedAt,
+                ]);
+            }
+
+            $this->audit($request, $companyId, 'transferred', 'inventory_issue', $issue->id, [
+                'origin_warehouse_id' => $originWarehouse->id,
+                'destination_warehouse_id' => $destinationWarehouse->id,
+                'items' => $issue->items()->get(['product_id', 'quantity'])->toArray(),
+            ]);
+
+            return $issue;
+        });
+
+        return redirect()->route('inventory.issues.index')->with('status', __('Traslado registrado correctamente.'));
     }
 
     public function receipts(Request $request): View

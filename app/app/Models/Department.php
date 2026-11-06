@@ -10,6 +10,7 @@ class Department extends Model
 {
     protected $fillable = [
         'company_id',
+        'cost_center_id',
         'code',
         'name',
         'manager_user_id',
@@ -24,6 +25,11 @@ class Department extends Model
     public function company(): BelongsTo
     {
         return $this->belongsTo(Company::class);
+    }
+
+    public function costCenter(): BelongsTo
+    {
+        return $this->belongsTo(CostCenter::class);
     }
 
     public function manager(): BelongsTo

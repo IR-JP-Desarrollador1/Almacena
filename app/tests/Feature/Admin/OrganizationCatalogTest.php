@@ -5,6 +5,7 @@ namespace Tests\Feature\Admin;
 use App\Models\Branch;
 use App\Models\Company;
 use App\Models\CostCenter;
+use App\Models\Department;
 use App\Models\Permission;
 use App\Models\Role;
 use App\Models\StorageLocation;
@@ -94,6 +95,52 @@ class OrganizationCatalogTest extends TestCase
         $this->get(route('admin.organization.locations.create'))->assertOk();
         $this->get(route('admin.organization.cost-centers.index'))->assertOk();
         $this->get(route('admin.organization.cost-centers.create'))->assertOk();
+    }
+
+    public function test_cost_centers_can_be_assigned_to_warehouses_and_departments_with_company_validation(): void
+    {
+        $costCenter = CostCenter::create([
+            'company_id' => $this->company->id,
+            'code' => 'CC-OPS',
+            'name' => 'Operaciones',
+        ]);
+        $branch = Branch::create([
+            'company_id' => $this->company->id,
+            'code' => 'BOG',
+            'name' => 'Sede Bogotá',
+        ]);
+
+        $this->post(route('admin.organization.warehouses.store'), [
+            'branch_id' => $branch->id,
+            'cost_center_id' => $costCenter->id,
+            'code' => 'BOD-01',
+            'name' => 'Bodega principal',
+        ])->assertRedirect();
+        $warehouse = Warehouse::query()->where('code', 'BOD-01')->firstOrFail();
+        $this->assertSame($costCenter->id, $warehouse->cost_center_id);
+
+        $this->post(route('admin.organization.departments.store'), [
+            'code' => 'AREA-01',
+            'name' => 'Área de operaciones',
+            'manager_user_id' => $this->administrator->id,
+            'cost_center_id' => $costCenter->id,
+        ])->assertRedirect();
+        $department = Department::query()->where('code', 'AREA-01')->firstOrFail();
+        $this->assertSame($costCenter->id, $department->cost_center_id);
+
+        $this->post(route('admin.organization.warehouses.store'), [
+            'branch_id' => $branch->id,
+            'cost_center_id' => 999999,
+            'code' => 'BOD-02',
+            'name' => 'Bodega sin asignar',
+        ])->assertSessionHasErrors('cost_center_id');
+
+        $this->post(route('admin.organization.departments.store'), [
+            'code' => 'AREA-02',
+            'name' => 'Área ajena',
+            'manager_user_id' => $this->administrator->id,
+            'cost_center_id' => 999999,
+        ])->assertSessionHasErrors('cost_center_id');
     }
 
     public function test_organization_view_permission_does_not_grant_write_access(): void

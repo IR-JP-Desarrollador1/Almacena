@@ -67,6 +67,7 @@
                                 <th class="px-6 py-3 text-right text-xs font-medium uppercase text-gray-500">{{ __('Cantidad') }}</th>
                                 <th class="px-6 py-3 text-right text-xs font-medium uppercase text-gray-500">{{ __('Saldo') }}</th>
                                 <th class="px-6 py-3 text-right text-xs font-medium uppercase text-gray-500">{{ __('Costo unitario base') }}</th>
+                                <th class="px-6 py-3 text-right text-xs font-medium uppercase text-gray-500">{{ __('Costo total') }}</th>
                                 <th class="px-6 py-3 text-left text-xs font-medium uppercase text-gray-500">{{ __('Moneda') }}</th>
                                 <th class="px-6 py-3 text-left text-xs font-medium uppercase text-gray-500">{{ __('Registrado por') }}</th>
                             </tr>
@@ -86,14 +87,15 @@
                                     <td class="px-6 py-4 text-sm font-medium">{{ $movement->movement_type === \App\Models\StockMovement::TYPE_RECEIPT ? __('Entrada') : __('Salida') }}</td>
                                     <td class="px-6 py-4 text-sm">{{ $documentReference ?: $movement->reference_type.' #'.$movement->reference_id }}</td>
                                     <td class="px-6 py-4 text-sm">{{ $movement->lot->lot_code }}</td>
-                                    <td class="whitespace-nowrap px-6 py-4 text-right text-sm {{ $signedQuantity < 0 ? 'text-red-700' : 'text-green-700' }}">{{ $signedQuantity > 0 ? '+' : '' }}{{ $regional->number($signedQuantity, 3) }}</td>
-                                    <td class="whitespace-nowrap px-6 py-4 text-right text-sm font-medium">{{ $regional->number($movement->balance_after, 3) }}</td>
-                                    <td class="whitespace-nowrap px-6 py-4 text-right text-sm">{{ $regional->number($movement->unit_cost_base, 4) }}</td>
+                                    <td class="whitespace-nowrap px-6 py-4 text-right text-sm {{ $signedQuantity < 0 ? 'text-red-700' : 'text-green-700' }}">{{ $signedQuantity > 0 ? '+' : '' }}{{ $regional->number($signedQuantity, 0) }}</td>
+                                    <td class="whitespace-nowrap px-6 py-4 text-right text-sm font-medium">{{ $regional->number($movement->balance_after, 0) }}</td>
+                                    <td class="whitespace-nowrap px-6 py-4 text-right text-sm">{{ $regional->number($movement->unit_cost_base, 2) }}</td>
+                                    <td class="whitespace-nowrap px-6 py-4 text-right text-sm">{{ $regional->number($movement->total_cost_base, 2) }}</td>
                                     <td class="whitespace-nowrap px-6 py-4 text-sm">{{ $movement->lot->baseCurrency->code }}</td>
                                     <td class="whitespace-nowrap px-6 py-4 text-sm">{{ $movement->user->name }} {{ $movement->user->last_name }}</td>
                                 </tr>
                             @empty
-                                <tr><td colspan="11" class="px-6 py-8 text-center text-sm text-gray-500">{{ __('No hay movimientos para los filtros seleccionados.') }}</td></tr>
+                                <tr><td colspan="12" class="px-6 py-8 text-center text-sm text-gray-500">{{ __('No hay movimientos para los filtros seleccionados.') }}</td></tr>
                             @endforelse
                         </tbody>
                     </table>

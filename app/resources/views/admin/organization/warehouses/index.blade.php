@@ -11,16 +11,18 @@
         @if (session('status'))<div class="rounded-md bg-green-50 p-4 text-sm text-green-800">{{ session('status') }}</div>@endif
         @include('admin.organization._tabs')
         <div class="overflow-hidden rounded-lg bg-white shadow">
-            <table class="min-w-full divide-y divide-gray-200">
-                <thead class="bg-gray-50"><tr><th class="px-6 py-3 text-left text-xs font-medium uppercase text-gray-500">{{ __('Código') }}</th><th class="px-6 py-3 text-left text-xs font-medium uppercase text-gray-500">{{ __('Bodega') }}</th><th class="px-6 py-3 text-left text-xs font-medium uppercase text-gray-500">{{ __('Sede') }}</th><th class="px-6 py-3 text-left text-xs font-medium uppercase text-gray-500">{{ __('Ubicaciones') }}</th><th class="px-6 py-3 text-left text-xs font-medium uppercase text-gray-500">{{ __('Estado') }}</th><th class="px-6 py-3"></th></tr></thead>
+            <div class="overflow-x-auto">
+                <table class="min-w-full divide-y divide-gray-200">
+                <thead class="bg-gray-50"><tr><th class="px-6 py-3 text-left text-xs font-medium uppercase text-gray-500">{{ __('Código') }}</th><th class="px-6 py-3 text-left text-xs font-medium uppercase text-gray-500">{{ __('Bodega') }}</th><th class="px-6 py-3 text-left text-xs font-medium uppercase text-gray-500">{{ __('Sede') }}</th><th class="px-6 py-3 text-left text-xs font-medium uppercase text-gray-500">{{ __('Centro de costo') }}</th><th class="px-6 py-3 text-left text-xs font-medium uppercase text-gray-500">{{ __('Ubicaciones') }}</th><th class="px-6 py-3 text-left text-xs font-medium uppercase text-gray-500">{{ __('Estado') }}</th><th class="px-6 py-3"></th></tr></thead>
                 <tbody class="divide-y divide-gray-200 bg-white">
                     @forelse ($warehouses as $warehouse)
-                        <tr><td class="px-6 py-4 text-sm">{{ $warehouse->code }}</td><td class="px-6 py-4 text-sm">{{ $warehouse->name }}</td><td class="px-6 py-4 text-sm">{{ $warehouse->branch->name }}</td><td class="px-6 py-4 text-sm">{{ $warehouse->storage_locations_count }}</td><td class="px-6 py-4 text-sm">{{ $warehouse->is_active ? __('Activa') : __('Inactiva') }}</td><td class="px-6 py-4 text-right text-sm">@if (Auth::user()->hasPermission('organization.manage'))<a data-admin-form-modal class="text-indigo-700 underline" href="{{ route('admin.organization.warehouses.edit', $warehouse) }}">{{ __('Editar') }}</a>@endif</td></tr>
+                        <tr><td class="px-6 py-4 text-sm">{{ $warehouse->code }}</td><td class="px-6 py-4 text-sm">{{ $warehouse->name }}</td><td class="px-6 py-4 text-sm">{{ $warehouse->branch->name }}</td><td class="px-6 py-4 text-sm">{{ $warehouse->costCenter ? $warehouse->costCenter->code.' — '.$warehouse->costCenter->name : '—' }}</td><td class="px-6 py-4 text-sm">{{ $warehouse->storage_locations_count }}</td><td class="px-6 py-4 text-sm">{{ $warehouse->is_active ? __('Activa') : __('Inactiva') }}</td><td class="px-6 py-4 text-right text-sm">@if (Auth::user()->hasPermission('organization.manage'))<a data-admin-form-modal class="text-indigo-700 underline" href="{{ route('admin.organization.warehouses.edit', $warehouse) }}">{{ __('Editar') }}</a>@endif</td></tr>
                     @empty
-                        <tr><td colspan="6" class="px-6 py-8 text-center text-sm text-gray-500">{{ __('No hay bodegas registradas.') }}</td></tr>
+                        <tr><td colspan="7" class="px-6 py-8 text-center text-sm text-gray-500">{{ __('No hay bodegas registradas.') }}</td></tr>
                     @endforelse
                 </tbody>
-            </table>
+                </table>
+            </div>
         </div>
         {{ $warehouses->links() }}
     </main>

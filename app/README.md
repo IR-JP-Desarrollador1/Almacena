@@ -12,6 +12,8 @@ Los datos maestros incluyen productos (código, nombre, descripción, unidad y c
 
 El flujo de compras permite configurar áreas solicitantes, asignar a cada área un jefe activo con permiso de decisión, y crear, editar, enviar, aprobar o rechazar requisiciones con sus líneas de productos. Cada usuario solicitante pertenece a un área; la requisición queda asignada al jefe de esa área al enviarse. El rechazo requiere motivo, permite corrección y reenvío, y cada cambio conserva su auditoría. En las requisiciones aprobadas, Compras registra cotizaciones de proveedores por producto; cada producto requiere ofertas de al menos dos proveedores antes de seleccionarse. El comparador convierte el total con impuestos a moneda base, muestra plazo, marca y calificación vigente, y exige justificar la selección de una oferta que no tenga el menor costo total. La adjudicación puede hacerse parcialmente y en etapas; cada etapa genera órdenes borrador agrupadas por proveedor y cada orden requiere aprobación antes de recibir. El costo trasladado al inventario permanece antes de impuestos. La opción Calificación de proveedores, protegida con `catalogs.manage`, conserva el historial y el promedio vigente de las evaluaciones. La moneda base no puede cambiarse después de registrar cotizaciones u órdenes para conservar comparables y costos históricos consistentes.
 
+Los reportes de Compras e Inventario permiten exportar a CSV y Excel los resultados completos del reporte seleccionado, conservando los filtros y el alcance autorizado de bodegas. En reportes y kardex, las cantidades se muestran sin decimales y los costos e importes con dos; el reporte de movimientos de inventario incluye el costo total de cada movimiento, y el kardex lo muestra firmado según sea entrada o salida. Las exportaciones CSV conservan un formato numérico estable. Las celdas de texto se protegen contra fórmulas de hoja de cálculo.
+
 ## Requisitos
 
 - PHP 8.2 o superior con extensiones PDO MySQL, OpenSSL, Mbstring, XML y Ctype.
@@ -63,6 +65,16 @@ npm.cmd run dev
 ```
 
 Si PowerShell bloquea `npm.ps1`, se puede invocar `npm.cmd` como en los ejemplos.
+
+### Datos operativos de demostración
+
+En la base de desarrollo, genera datos relacionados para requisiciones, cotizaciones, órdenes de compra, entradas, salidas, traslados y conteos con ajustes:
+
+```powershell
+php artisan db:seed --class=OperationalDemoSeeder
+```
+
+El seeder reutiliza la empresa, los usuarios y los productos demo; crea los proveedores, el área y las bodegas que falten. Requiere los productos activos `DEMO-PROD-001`, `DEMO-PROD-003`, `DEMO-PROD-006` y `DEMO-PROD-010`. Es transaccional e idempotente: si ya están todas sus operaciones no las duplica, y si encuentra referencias de una ejecución parcial se detiene sin continuar. No lo ejecutes en producción.
 
 ## Validación
 

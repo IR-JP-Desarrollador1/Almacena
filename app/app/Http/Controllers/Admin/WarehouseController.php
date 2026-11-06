@@ -12,7 +12,7 @@ use Illuminate\View\View;
 
 class WarehouseController extends OrganizationAdminController
 {
-    private const AUDIT_FIELDS = ['branch_id', 'code', 'name', 'address', 'is_active'];
+    private const AUDIT_FIELDS = ['branch_id', 'cost_center_id', 'code', 'name', 'address', 'is_active'];
 
     public function index(): View
     {
@@ -21,7 +21,7 @@ class WarehouseController extends OrganizationAdminController
         return view('admin.organization.warehouses.index', [
             'warehouses' => Warehouse::query()
                 ->whereHas('branch', fn ($query) => $query->where('company_id', $company->id))
-                ->with('branch')
+                ->with(['branch', 'costCenter'])
                 ->withCount('storageLocations')
                 ->orderBy('code')
                 ->paginate(20),
@@ -35,6 +35,7 @@ class WarehouseController extends OrganizationAdminController
         return view('admin.organization.warehouses.form', [
             'warehouse' => new Warehouse,
             'branches' => $company->branches()->where('is_active', true)->orderBy('name')->get(),
+            'costCenters' => $company->costCenters()->where('is_active', true)->orderBy('code')->get(),
         ]);
     }
 
@@ -43,6 +44,7 @@ class WarehouseController extends OrganizationAdminController
         $company = $this->company();
         $validated = $request->validate([
             'branch_id' => ['required', Rule::exists('branches', 'id')->where('company_id', $company->id)->where('is_active', true)],
+            'cost_center_id' => ['nullable', Rule::exists('cost_centers', 'id')->where('company_id', $company->id)->where('is_active', true)],
             'code' => ['required', 'string', 'max:50', Rule::unique('warehouses', 'code')->where('branch_id', $request->input('branch_id'))],
             'name' => ['required', 'string', 'max:255'],
             'address' => ['nullable', 'string', 'max:255'],
@@ -66,6 +68,10 @@ class WarehouseController extends OrganizationAdminController
 
         return view('admin.organization.warehouses.form', [
             'warehouse' => $warehouse,
+            'costCenters' => $company->costCenters()
+                ->where(fn ($query) => $query->where('is_active', true)->orWhere('id', $warehouse->cost_center_id))
+                ->orderBy('code')
+                ->get(),
             'branches' => $company->branches()
                 ->where(fn ($query) => $query->where('is_active', true)->orWhere('id', $warehouse->branch_id))
                 ->orderBy('name')
@@ -82,6 +88,12 @@ class WarehouseController extends OrganizationAdminController
                 'required',
                 Rule::exists('branches', 'id')->where('company_id', $company->id)->where(
                     fn ($query) => $query->where('is_active', true)->orWhere('id', $warehouse->branch_id),
+                ),
+            ],
+            'cost_center_id' => [
+                'nullable',
+                Rule::exists('cost_centers', 'id')->where('company_id', $company->id)->where(
+                    fn ($query) => $query->where('is_active', true)->orWhere('id', $warehouse->cost_center_id),
                 ),
             ],
             'code' => ['required', 'string', 'max:50', Rule::unique('warehouses', 'code')->where('branch_id', $request->input('branch_id'))->ignore($warehouse->id)],
@@ -118,4 +130,5 @@ class WarehouseController extends OrganizationAdminController
             ->whereHas('branch', fn ($query) => $query->where('company_id', $companyId))
             ->firstOrFail();
     }
+
 }

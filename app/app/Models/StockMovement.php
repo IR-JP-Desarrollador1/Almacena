@@ -59,4 +59,9 @@ class StockMovement extends Model
     {
         return $this->belongsTo(InventoryIssue::class, 'reference_id');
     }
+
+    public function inventoryCount(): BelongsTo
+    {
+        return $this->belongsTo(InventoryCount::class, 'reference_id');
+    }
 }

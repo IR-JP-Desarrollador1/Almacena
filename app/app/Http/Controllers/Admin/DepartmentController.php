@@ -13,14 +13,14 @@ use Illuminate\View\View;
 
 class DepartmentController extends OrganizationAdminController
 {
-    private const AUDIT_FIELDS = ['code', 'name', 'manager_user_id', 'is_active'];
+    private const AUDIT_FIELDS = ['cost_center_id', 'code', 'name', 'manager_user_id', 'is_active'];
 
     public function index(): View
     {
         $company = $this->company();
 
         return view('admin.organization.departments.index', [
-            'departments' => $company->departments()->with('manager')->withCount('requisitions')->orderBy('name')->paginate(20),
+            'departments' => $company->departments()->with(['manager', 'costCenter'])->withCount('requisitions')->orderBy('name')->paginate(20),
         ]);
     }
 
@@ -31,6 +31,7 @@ class DepartmentController extends OrganizationAdminController
         return view('admin.organization.departments.form', [
             'department' => new Department,
             'managers' => $this->eligibleManagers(),
+            'costCenters' => $company->costCenters()->where('is_active', true)->orderBy('code')->get(),
         ]);
     }
 
@@ -40,6 +41,7 @@ class DepartmentController extends OrganizationAdminController
         $validated = $request->validate([
             'code' => ['required', 'string', 'max:50', Rule::unique('departments', 'code')->where('company_id', $company->id)],
             'name' => ['required', 'string', 'max:255'],
+            'cost_center_id' => ['nullable', Rule::exists('cost_centers', 'id')->where('company_id', $company->id)->where('is_active', true)],
             'manager_user_id' => ['required', Rule::exists('users', 'id')->where('status', User::STATUS_ACTIVE)],
         ]);
         $this->ensureEligibleManager((int) $validated['manager_user_id']);
@@ -63,6 +65,10 @@ class DepartmentController extends OrganizationAdminController
         return view('admin.organization.departments.form', [
             'department' => $department,
             'managers' => $this->eligibleManagers($department->manager_user_id),
+            'costCenters' => $company->costCenters()
+                ->where(fn ($query) => $query->where('is_active', true)->orWhere('id', $department->cost_center_id))
+                ->orderBy('code')
+                ->get(),
         ]);
     }
 
@@ -73,6 +79,12 @@ class DepartmentController extends OrganizationAdminController
         $validated = $request->validate([
             'code' => ['required', 'string', 'max:50', Rule::unique('departments', 'code')->where('company_id', $company->id)->ignore($department->id)],
             'name' => ['required', 'string', 'max:255'],
+            'cost_center_id' => [
+                'nullable',
+                Rule::exists('cost_centers', 'id')->where('company_id', $company->id)->where(
+                    fn ($query) => $query->where('is_active', true)->orWhere('id', $department->cost_center_id),
+                ),
+            ],
             'manager_user_id' => ['required', Rule::exists('users', 'id')->where('status', User::STATUS_ACTIVE)],
             'is_active' => ['required', 'boolean'],
         ]);

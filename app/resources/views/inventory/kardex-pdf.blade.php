@@ -28,7 +28,7 @@
         <thead>
             <tr>
                 @foreach ($headings as $index => $heading)
-                    <th class="{{ in_array($index, [8, 9, 10], true) ? 'number' : '' }}">{{ $heading }}</th>
+                    <th class="{{ in_array($index, [8, 9, 10, 11], true) ? 'number' : '' }}">{{ $heading }}</th>
                 @endforeach
             </tr>
         </thead>
@@ -36,9 +36,9 @@
             @forelse ($rows as $row)
                 <tr>
                     @foreach ($row as $index => $value)
-                        <td class="{{ in_array($index, [8, 9, 10], true) ? 'number' : '' }}">
-                            @if (in_array($index, [8, 9, 10], true))
-                                {{ $regional->number($value, $index === 10 ? 4 : 3) }}
+                        <td class="{{ in_array($index, [8, 9, 10, 11], true) ? 'number' : '' }}">
+                            @if (in_array($index, [8, 9, 10, 11], true))
+                                {{ $regional->number($value, in_array($index, [10, 11], true) ? 2 : 0) }}
                             @else
                                 {{ $value }}
                             @endif

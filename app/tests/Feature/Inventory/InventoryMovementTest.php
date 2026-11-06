@@ -720,7 +720,7 @@ class InventoryMovementTest extends TestCase
             ->post(route('inventory.receipts.store'), [
                 'purchase_order_id' => $firstOrder->id,
                 'items' => [
-                    ['purchase_order_item_id' => $firstOrderItem->id, 'quantity' => '3.000', 'expires_on' => '2026-11-01'],
+                    ['purchase_order_item_id' => $firstOrderItem->id, 'quantity' => '3.000', 'expires_on' => today()->addDays(5)->toDateString()],
                 ],
             ])->assertRedirect();
 
@@ -729,7 +729,7 @@ class InventoryMovementTest extends TestCase
         $this->actingAs($this->warehouseOperator)->post(route('inventory.receipts.store'), [
             'purchase_order_id' => $secondOrder->id,
             'items' => [
-                ['purchase_order_item_id' => $secondOrderItem->id, 'quantity' => '5.000', 'expires_on' => '2026-12-01'],
+                ['purchase_order_item_id' => $secondOrderItem->id, 'quantity' => '5.000', 'expires_on' => today()->addDays(12)->toDateString()],
             ],
         ])->assertRedirect();
 
@@ -1347,9 +1347,12 @@ class InventoryMovementTest extends TestCase
             ->assertOk()
             ->assertSee('ENT-')
             ->assertSee('SAL-')
-            ->assertSee('+2,000')
-            ->assertSee('-0,750')
-            ->assertSee('1,250')
+            ->assertSee('+2')
+            ->assertSee('-1')
+            ->assertSee('1')
+            ->assertSee('15,00')
+            ->assertSee('30,00')
+            ->assertSee('-11,25')
             ->assertSee('Formato regional: 17/08/2026');
 
         $this->get(route('inventory.kardex'))
@@ -1360,7 +1363,9 @@ class InventoryMovementTest extends TestCase
         $csv->assertOk()->assertHeader('content-type', 'text/csv; charset=UTF-8');
         $this->assertStringContainsString('Código de producto', $csv->streamedContent());
         $this->assertStringContainsString('PROD-01', $csv->streamedContent());
-        $this->assertStringContainsString('2,000', $csv->streamedContent());
+        $this->assertStringContainsString('15,00', $csv->streamedContent());
+        $this->assertStringContainsString('30,00', $csv->streamedContent());
+        $this->assertStringContainsString('-11,25', $csv->streamedContent());
         $xlsx = $this->get(route('inventory.kardex.export', ['format' => 'xlsx']));
         $xlsx->assertOk()
             ->assertHeader('content-type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
@@ -1439,12 +1444,16 @@ class InventoryMovementTest extends TestCase
             $csvRows[] = $row;
         }
         fclose($csvStream);
-        $this->assertCount(13, $csvHeadings);
+        $this->assertCount(14, $csvHeadings);
         $this->assertCount(2, $csvRows);
-        $this->assertContains('2,000', array_column($csvRows, 8));
-        $this->assertContains('1,250', array_column($csvRows, 8));
-        $this->assertContains('2,000', array_column($csvRows, 9));
-        $this->assertContains('1,250', array_column($csvRows, 9));
+        $this->assertSame('Costo total', $csvHeadings[11]);
+        $this->assertContains('2', array_column($csvRows, 8));
+        $this->assertContains('1', array_column($csvRows, 8));
+        $this->assertContains('2', array_column($csvRows, 9));
+        $this->assertContains('1', array_column($csvRows, 9));
+        $this->assertContains('15,00', array_column($csvRows, 10));
+        $this->assertContains('30,00', array_column($csvRows, 11));
+        $this->assertContains('25,00', array_column($csvRows, 11));
 
         $xlsx = $this->get(route('inventory.kardex.export', ['format' => 'xlsx']));
         $xlsx->assertOk()
@@ -1456,10 +1465,15 @@ class InventoryMovementTest extends TestCase
             file_put_contents($temporaryFile, $xlsxContent);
             $spreadsheet = IOFactory::load($temporaryFile);
             $sheet = $spreadsheet->getActiveSheet();
-            $this->assertSame('M', $sheet->getHighestColumn());
+            $this->assertSame('N', $sheet->getHighestColumn());
             $this->assertSame(3, $sheet->getHighestRow());
             $this->assertSame(DataType::TYPE_NUMERIC, $sheet->getCell('I2')->getDataType());
             $this->assertSame(DataType::TYPE_NUMERIC, $sheet->getCell('J2')->getDataType());
+            $this->assertSame(30.0, $sheet->getCell('L2')->getValue());
+            $this->assertSame('#,##0', $sheet->getCell('I2')->getStyle()->getNumberFormat()->getFormatCode());
+            $this->assertSame('#,##0', $sheet->getCell('J2')->getStyle()->getNumberFormat()->getFormatCode());
+            $this->assertSame('#,##0.00', $sheet->getCell('K2')->getStyle()->getNumberFormat()->getFormatCode());
+            $this->assertSame('#,##0.00', $sheet->getCell('L2')->getStyle()->getNumberFormat()->getFormatCode());
             $exportedProducts = [$sheet->getCell('C2')->getValue(), $sheet->getCell('C3')->getValue()];
             $this->assertEqualsCanonicalizing(['PROD-01', 'PROD-02'], $exportedProducts);
             $spreadsheet->disconnectWorksheets();
@@ -1516,9 +1530,10 @@ class InventoryMovementTest extends TestCase
             ->get(route('inventory.kardex', $filters));
         $filteredPage
             ->assertOk()
-            ->assertSee('-0,750')
-            ->assertSee('1,250')
-            ->assertDontSee('+2,000')
+            ->assertSee('-1')
+            ->assertSee('1')
+            ->assertDontSee('-0,750')
+            ->assertDontSee('+2')
             ->assertSee(route('inventory.kardex.export', [...$filters, 'format' => 'xlsx']))
             ->assertSee(route('inventory.kardex.export', [...$filters, 'format' => 'csv']))
             ->assertSee(route('inventory.kardex.export', [...$filters, 'format' => 'pdf']));
@@ -1536,8 +1551,9 @@ class InventoryMovementTest extends TestCase
         fclose($csvStream);
         $this->assertCount(1, $csvRows);
         $this->assertSame('PROD-01', $csvRows[0][2]);
-        $this->assertSame('-0,750', $csvRows[0][8]);
-        $this->assertSame('1,250', $csvRows[0][9]);
+        $this->assertSame('-1', $csvRows[0][8]);
+        $this->assertSame('1', $csvRows[0][9]);
+        $this->assertSame('-11,25', $csvRows[0][11]);
 
         $xlsx = $this->get(route('inventory.kardex.export', [...$filters, 'format' => 'xlsx']));
         $xlsx->assertOk()
@@ -1551,6 +1567,10 @@ class InventoryMovementTest extends TestCase
             $this->assertSame('PROD-01', $sheet->getCell('C2')->getValue());
             $this->assertSame(-0.75, $sheet->getCell('I2')->getValue());
             $this->assertSame(1.25, $sheet->getCell('J2')->getValue());
+            $this->assertSame(-11.25, $sheet->getCell('L2')->getValue());
+            $this->assertSame('#,##0', $sheet->getCell('I2')->getStyle()->getNumberFormat()->getFormatCode());
+            $this->assertSame('#,##0', $sheet->getCell('J2')->getStyle()->getNumberFormat()->getFormatCode());
+            $this->assertSame('#,##0.00', $sheet->getCell('L2')->getStyle()->getNumberFormat()->getFormatCode());
             $spreadsheet->disconnectWorksheets();
         } finally {
             unlink($temporaryFile);

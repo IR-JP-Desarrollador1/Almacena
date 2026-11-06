@@ -13,7 +13,7 @@
                 request()->routeIs('dashboard') => [
                     'section' => 'INICIO',
                     'breadcrumb' => 'Panel principal',
-                    'description' => 'Administra desde un solo lugar los catálogos, la organización y las solicitudes de compra.',
+                    'description' => 'Administra desde un solo lugar los catálogos, la organización, las compras y los movimientos de inventario.',
                 ],
                 request()->routeIs('admin.company.*') => [
                     'section' => 'EMPRESA',
@@ -110,6 +110,11 @@
                     'breadcrumb' => 'Requisiciones',
                     'description' => 'Gestiona borradores, envía solicitudes a aprobación y registra las salidas parciales de inventario.',
                 ],
+                request()->routeIs('inventory.counts.*') => [
+                    'section' => 'INVENTARIO',
+                    'breadcrumb' => 'Conteos y ajustes',
+                    'description' => 'Compara existencias físicas con el saldo del sistema y revisa los ajustes antes de aplicarlos.',
+                ],
                 request()->routeIs('purchasing.orders.direct.create') => [
                     'section' => 'COMPRAS',
                     'breadcrumb' => 'Órdenes de compra',
@@ -141,6 +146,16 @@
                     'section' => 'COMPRAS',
                     'breadcrumb' => 'Comparación de cotizaciones',
                     'description' => 'Compara ofertas por producto y genera órdenes de compra por etapas.',
+                ],
+                request()->routeIs('reports.inventory') => [
+                    'section' => 'REPORTES',
+                    'breadcrumb' => 'Reporte de inventario',
+                    'description' => 'Consulta movimientos, existencias actuales y ajustes aprobados en las bodegas a las que tienes acceso.',
+                ],
+                request()->routeIs('reports.purchasing') => [
+                    'section' => 'REPORTES',
+                    'breadcrumb' => 'Reporte de compras',
+                    'description' => 'Analiza órdenes, valor aprobado y requisiciones por estado, proveedor, área y centro de costo.',
                 ],
                 request()->routeIs('profile.*') => [
                     'section' => 'CUENTA',

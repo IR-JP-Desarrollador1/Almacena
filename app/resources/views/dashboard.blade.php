@@ -48,6 +48,28 @@
                 </a>
             @endif
 
+            @if (Auth::user()->hasPermission('inventory.transfers.create') || Auth::user()->hasPermission('inventory.transfers.view'))
+                <a class="dashboard-link" href="{{ route('inventory.transfers.create') }}">
+                    <span class="dashboard-link-icon" aria-hidden="true">06</span>
+                    <span>
+                        <strong>{{ __('Traslados entre bodegas') }}</strong>
+                        <small>{{ __('Registra movimientos de productos entre bodegas autorizadas.') }}</small>
+                    </span>
+                    <span class="dashboard-link-arrow" aria-hidden="true">&rarr;</span>
+                </a>
+            @endif
+
+            @if (Auth::user()->hasPermission('inventory.counts.view') || Auth::user()->hasPermission('inventory.counts.create') || Auth::user()->hasPermission('inventory.counts.approve'))
+                <a class="dashboard-link" href="{{ route('inventory.counts.index') }}">
+                    <span class="dashboard-link-icon" aria-hidden="true">07</span>
+                    <span>
+                        <strong>{{ __('Conteos y ajustes') }}</strong>
+                        <small>{{ __('Registra existencias físicas y revisa diferencias antes de ajustar.') }}</small>
+                    </span>
+                    <span class="dashboard-link-arrow" aria-hidden="true">&rarr;</span>
+                </a>
+            @endif
+
             @if (Auth::user()->hasPermission('users.view'))
                 <a class="dashboard-link" href="{{ route('admin.users.index') }}">
                     <span class="dashboard-link-icon" aria-hidden="true">04</span>
